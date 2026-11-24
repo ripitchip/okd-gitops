@@ -1,0 +1,10 @@
+# Les composants NVIDIA (driver, toolkit, device plugin) ont besoin d'accès privilégiés au nœud.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nvidia-gpu-operator
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+    openshift.io/cluster-monitoring: "true"

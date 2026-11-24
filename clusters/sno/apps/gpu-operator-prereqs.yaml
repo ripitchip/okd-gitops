@@ -1,0 +1,22 @@
+# Prérequis du GPU Operator : namespace, droits SCC, dépôt RPM du kernel.
+# Doit être Healthy avant le déploiement de l'opérateur (wave 10).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-operator-prereqs
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/ripitchip/okd-gitops
+    targetRevision: main
+    path: platform/gpu-operator/prereqs/overlays/sno
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nvidia-gpu-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

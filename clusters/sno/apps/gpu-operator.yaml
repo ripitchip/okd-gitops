@@ -1,0 +1,32 @@
+# NVIDIA GPU Operator, déployé depuis le chart Helm officiel.
+# Multi-source : le chart vient du dépôt NVIDIA, les values viennent de ce dépôt ($values).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://helm.ngc.nvidia.com/nvidia
+      chart: gpu-operator
+      targetRevision: v26.7.3
+      helm:
+        releaseName: gpu-operator   # identique à l'installation manuelle : adoption sans recréation
+        valueFiles:
+          - $values/platform/gpu-operator/operator/values-common.yaml
+          - $values/platform/gpu-operator/operator/values-sno.yaml
+    - repoURL: https://github.com/ripitchip/okd-gitops
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nvidia-gpu-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

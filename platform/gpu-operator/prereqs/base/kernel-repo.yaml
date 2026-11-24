@@ -1,0 +1,94 @@
+# Dépôt dnf interne contenant les RPM du kernel exact du nœud.
+# Pourquoi : les miroirs CentOS Stream ne gardent que les kernels récents,
+# alors que le driver NVIDIA doit être compilé contre le kernel du nœud (voir ADR 0002).
+# La version du kernel est fixée dans l'overlay du cluster (KERNEL_VERSION).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kernel-repo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kernel-repo
+  labels:
+    app.kubernetes.io/name: kernel-repo
+    app.kubernetes.io/part-of: gpu-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kernel-repo
+  template:
+    metadata:
+      labels:
+        app: kernel-repo
+        app.kubernetes.io/name: kernel-repo
+        app.kubernetes.io/part-of: gpu-operator
+    spec:
+      serviceAccountName: kernel-repo
+      initContainers:
+        - name: fetch
+          image: quay.io/centos/centos:stream10
+          securityContext:
+            runAsUser: 0
+          env:
+            - name: KERNEL_VERSION        # ex. 6.12.0-260.el10, surchargé par l'overlay
+              value: "CHANGE_ME"
+            - name: KOJI_URL
+              value: https://kojihub.stream.centos.org/kojifiles/packages/kernel
+          command: ["/bin/bash", "-ec"]
+          args:
+            - |
+              dnf -y -q install createrepo_c
+              cd /repo
+              VER="${KERNEL_VERSION%%-*}"     # 6.12.0
+              REL="${KERNEL_VERSION#*-}"      # 260.el10
+              for p in kernel kernel-core kernel-modules kernel-modules-core kernel-devel kernel-headers; do
+                curl -fsSLO "${KOJI_URL}/${VER}/${REL}/x86_64/${p}-${KERNEL_VERSION}.x86_64.rpm"
+              done
+              ls -lh
+              createrepo_c /repo
+          volumeMounts:
+            - name: repo
+              mountPath: /repo
+      containers:
+        - name: http
+          image: quay.io/centos/centos:stream10
+          securityContext:
+            runAsUser: 0
+          command: ["python3", "-m", "http.server", "8080", "--directory", "/repo"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /repodata/repomd.xml
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: repo
+              mountPath: /repo
+      volumes:
+        - name: repo
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kernel-repo
+spec:
+  selector:
+    app: kernel-repo
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

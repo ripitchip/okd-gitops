@@ -1,0 +1,5 @@
+[kernel-node]
+name=CentOS Stream 10 - kernel du noeud (Koji, via kernel-repo)
+baseurl=http://kernel-repo.nvidia-gpu-operator.svc:8080/
+gpgcheck=0
+enabled=1
