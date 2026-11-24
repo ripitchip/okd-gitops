@@ -1,0 +1,22 @@
+# Projet réservé à l'équipe plateforme : composants cluster-wide.
+# Les futures applications métier iront dans des projets dédiés, plus restreints
+# (namespaces autorisés, pas de ressources cluster-scoped).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  description: Composants de plateforme (Argo CD, GPU, sécurité, observabilité)
+  sourceRepos:
+    - https://github.com/ripitchip/okd-gitops
+    - https://helm.ngc.nvidia.com/nvidia
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  orphanedResources:
+    warn: true

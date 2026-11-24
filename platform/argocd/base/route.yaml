@@ -1,0 +1,14 @@
+# argocd-server gère lui-même son TLS : route en passthrough.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: argocd
+spec:
+  to:
+    kind: Service
+    name: argocd-server
+  port:
+    targetPort: https
+  tls:
+    termination: passthrough
+    insecureEdgeTerminationPolicy: Redirect

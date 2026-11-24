@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+
+resources:
+  # Version épinglée. Upgrade : changer le tag après lecture du guide
+  # https://argo-cd.readthedocs.io/en/stable/operator-manual/upgrading/overview/
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml
+  - route.yaml
+  - projects/platform.yaml
+
+patches:
+  # OpenShift : laisser la SCC restricted-v2 attribuer l'UID (pas d'UID fixe)
+  - path: patches/redis-arbitrary-uid.yaml
+  # Santé des Applications enfants (nécessaire pour les sync waves en app of apps)
+  - path: patches/argocd-cm.yaml

@@ -1,0 +1,23 @@
+# Application racine (app of apps) du cluster sno.
+# Appliquée une seule fois à la main : oc apply -f bootstrap/root-app.yaml
+# Elle déploie tout ce qui est listé dans clusters/sno/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-sno
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/ripitchip/okd-gitops
+    targetRevision: main
+    path: clusters/sno
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
