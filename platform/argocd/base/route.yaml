@@ -1,4 +1,4 @@
-# argocd-server gère lui-même son TLS : route en passthrough.
+# argocd-server handles its own TLS
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:

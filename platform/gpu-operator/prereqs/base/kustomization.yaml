@@ -8,8 +8,7 @@ resources:
   - kernel-repo.yaml
 
 configMapGenerator:
-  # Dépôt dnf injecté dans le conteneur du driver (ClusterPolicy driver.repoConfig).
-  # Nom fixe : il est référencé dans les values Helm.
+  # name is fixed, referenced from Helm values (driver.repoConfig)
   - name: cs10-repos
     files:
       - cs10.repo

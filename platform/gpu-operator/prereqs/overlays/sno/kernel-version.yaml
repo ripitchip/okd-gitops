@@ -1,5 +1,4 @@
-# Kernel du nœud sno (uname -r, sans le suffixe .x86_64).
-# ⚠️ À mettre à jour AVANT chaque upgrade OKD qui change le kernel.
+# uname -r, no .x86_64 suffix. Update before any kernel-changing OKD upgrade.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

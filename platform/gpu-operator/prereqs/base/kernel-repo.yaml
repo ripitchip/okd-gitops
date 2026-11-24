@@ -1,7 +1,5 @@
-# Dépôt dnf interne contenant les RPM du kernel exact du nœud.
-# Pourquoi : les miroirs CentOS Stream ne gardent que les kernels récents,
-# alors que le driver NVIDIA doit être compilé contre le kernel du nœud (voir ADR 0002).
-# La version du kernel est fixée dans l'overlay du cluster (KERNEL_VERSION).
+# CentOS Stream mirrors drop old kernels, so we fetch the node's exact kernel RPMs
+# from Koji ourselves (ADR 0002).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -35,7 +33,7 @@ spec:
           securityContext:
             runAsUser: 0
           env:
-            - name: KERNEL_VERSION        # ex. 6.12.0-260.el10, surchargé par l'overlay
+            - name: KERNEL_VERSION        # overridden by the cluster overlay
               value: "CHANGE_ME"
             - name: KOJI_URL
               value: https://kojihub.stream.centos.org/kojifiles/packages/kernel

@@ -1,6 +1,4 @@
-# Values spécifiques au cluster sno (RTX 2000 Ada).
 driver:
-  # nvcr.io/nvidia/driver:595.91.07-rocky10, épinglé par digest : quand la version
-  # commence par "sha256:", l'opérateur n'ajoute pas de suffixe d'OS au tag.
-  # Mise à jour : skopeo inspect --format '{{.Digest}}' docker://nvcr.io/nvidia/driver:<version>-rocky10
+  # digest pin (nvcr.io/nvidia/driver:595.91.07-rocky10): sha256 prefix skips the OS tag suffix
+  # update: skopeo inspect --format '{{.Digest}}' docker://nvcr.io/nvidia/driver:<version>-rocky10
   version: "sha256:5a03566cd55cd7aa563e97f5e5fcab0485ac7f8ce92210734ad6dc42592c0556"

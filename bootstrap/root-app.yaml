@@ -1,6 +1,4 @@
-# Application racine (app of apps) du cluster sno.
-# Appliquée une seule fois à la main : oc apply -f bootstrap/root-app.yaml
-# Elle déploie tout ce qui est listé dans clusters/sno/.
+# applied once by hand: oc apply -f bootstrap/root-app.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

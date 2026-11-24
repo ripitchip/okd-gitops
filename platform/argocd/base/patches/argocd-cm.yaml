@@ -3,8 +3,7 @@ kind: ConfigMap
 metadata:
   name: argocd-cm
 data:
-  # Par défaut, Argo CD ne calcule pas la santé d'une Application enfant :
-  # sans ce bloc, les sync waves entre Applications ne sont pas respectées.
+  # needed for sync waves between Applications to work
   resource.customizations.health.argoproj.io_Application: |
     hs = {}
     hs.status = "Progressing"

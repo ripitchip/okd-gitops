@@ -1,5 +1,4 @@
-# Le manifest upstream impose runAsUser: 999, hors de la plage d'UID du namespace.
-# null supprime le champ : OpenShift attribue un UID valide (restricted-v2), sans SCC supplémentaire.
+# drop upstream's fixed UID 999, let restricted-v2 assign one
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1,19 +1,17 @@
-# Values communes à tous les clusters OKD (SCOS).
 operator:
   defaultRuntime: crio
 
-# NFD déployé par le chart (pas d'opérateur NFD séparé)
 nfd:
   enabled: true
 
 driver:
   enabled: true
-  # SCOS n'est pas reconnu comme OpenShift par l'opérateur : on fournit nous-mêmes
-  # l'image (rocky10, par digest) et le dépôt des RPM du kernel. Voir ADR 0002.
+  # SCOS isn't recognized as OpenShift by the operator, so we set the image
+  # (rocky10, by digest) and kernel RPM repo ourselves. See ADR 0002.
   repository: nvcr.io/nvidia
   image: driver
   repoConfig:
     configMapName: cs10-repos
-  # Sur un nœud unique, l'upgrade automatique cordonne le nœud sans pouvoir drainer ailleurs.
+  # single node: can't drain, so no auto upgrade
   upgradePolicy:
     autoUpgrade: false

@@ -1,5 +1,4 @@
-# Argo CD se gère lui-même.
-# prune désactivé : on ne laisse jamais Argo CD supprimer ses propres composants.
+# prune disabled: never let Argo CD delete its own components
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

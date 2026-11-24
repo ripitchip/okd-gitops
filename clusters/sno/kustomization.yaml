@@ -1,5 +1,3 @@
-# Composants actifs sur le cluster sno.
-# Ajouter un composant = ajouter son Application ici.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

@@ -1,5 +1,4 @@
-# NVIDIA GPU Operator, déployé depuis le chart Helm officiel.
-# Multi-source : le chart vient du dépôt NVIDIA, les values viennent de ce dépôt ($values).
+# multi-source: chart from NVIDIA, values from this repo
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -14,7 +13,7 @@ spec:
       chart: gpu-operator
       targetRevision: v26.7.3
       helm:
-        releaseName: gpu-operator   # identique à l'installation manuelle : adoption sans recréation
+        releaseName: gpu-operator   # matches the manual install, for adoption
         valueFiles:
           - $values/platform/gpu-operator/operator/values-common.yaml
           - $values/platform/gpu-operator/operator/values-sno.yaml

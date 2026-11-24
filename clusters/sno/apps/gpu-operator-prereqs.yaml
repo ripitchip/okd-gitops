@@ -1,5 +1,4 @@
-# Prérequis du GPU Operator : namespace, droits SCC, dépôt RPM du kernel.
-# Doit être Healthy avant le déploiement de l'opérateur (wave 10).
+# must be Healthy before gpu-operator (wave 10)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

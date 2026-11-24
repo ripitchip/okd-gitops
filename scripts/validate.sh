@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Valide le rendu de tous les overlays Kustomize (à lancer en local ou en CI).
-# Prérequis : kustomize (ou oc), et optionnellement kubeconform pour valider les schémas.
+# renders every kustomization under clusters/ and platform/, checks schema if kubeconform is present
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

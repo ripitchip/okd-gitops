@@ -1,4 +1,4 @@
-# Les composants NVIDIA (driver, toolkit, device plugin) ont besoin d'accès privilégiés au nœud.
+# NVIDIA components need privileged node access
 apiVersion: v1
 kind: Namespace
 metadata:

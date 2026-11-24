@@ -1,6 +1,4 @@
-# Projet réservé à l'équipe plateforme : composants cluster-wide.
-# Les futures applications métier iront dans des projets dédiés, plus restreints
-# (namespaces autorisés, pas de ressources cluster-scoped).
+# cluster-wide platform components; app teams get their own scoped projects later
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
