@@ -1,0 +1,12 @@
+# drop upstream's fixed UID 1001, let restricted-v2 assign one
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-dex-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: dex
+          securityContext:
+            runAsUser: null

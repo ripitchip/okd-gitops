@@ -10,4 +10,5 @@ resources:
 
 patches:
   - path: patches/redis-arbitrary-uid.yaml
+  - path: patches/dex-arbitrary-uid.yaml
   - path: patches/argocd-cm.yaml
