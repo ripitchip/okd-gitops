@@ -19,6 +19,12 @@ spec:
         certManager:
           namespace: cert-manager
           serviceAccountName: cert-manager-release
+        # drop upstream's fixed UID/GID 1000, let restricted-v2 assign its own
+        pod:
+          securityContext:
+            pod:
+              runAsUser: null
+              runAsGroup: null
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
