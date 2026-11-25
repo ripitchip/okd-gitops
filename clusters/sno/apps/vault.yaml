@@ -25,6 +25,14 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: vault
+  # the apiserver enriches each volumeClaimTemplate entry on read (apiVersion,
+  # kind, status, volumeMode default) in ways the chart never sets — and the
+  # field is immutable after creation anyway, so ignore it wholesale
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
   syncPolicy:
     automated:
       prune: true
