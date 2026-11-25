@@ -1,0 +1,62 @@
+installCRDs: true
+
+# no fixed UIDs here (unlike the source cluster): restricted-v2 assigns its own
+# per-namespace range, a hardcoded UID would be rejected like dex-server was.
+podSecurityContext:
+  enabled: true
+securityContext:
+  enabled: true
+  runAsNonRoot: true
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+webhook:
+  failurePolicy: Ignore
+  replicaCount: 2
+  podSecurityContext:
+    enabled: true
+  securityContext:
+    enabled: true
+    runAsNonRoot: true
+  lookaheadInterval: 5m
+  readinessProbe:
+    initialDelaySeconds: 45
+    failureThreshold: 12
+    periodSeconds: 5
+    timeoutSeconds: 5
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+certController:
+  podSecurityContext:
+    enabled: true
+  securityContext:
+    enabled: true
+    runAsNonRoot: true
+  readinessProbe:
+    initialDelaySeconds: 45
+    failureThreshold: 12
+    periodSeconds: 5
+    timeoutSeconds: 5
+  startupProbe:
+    enabled: true
+    failureThreshold: 30
+    periodSeconds: 10
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi

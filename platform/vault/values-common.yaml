@@ -1,0 +1,83 @@
+global:
+  enabled: true
+  namespace: vault
+
+server:
+  readinessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedok=true"
+    timeoutSeconds: 5
+  livenessProbe:
+    enabled: false
+    path: "/v1/sys/health?standbyok=true&sealedok=true"
+    timeoutSeconds: 5
+    initialDelaySeconds: 60
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  # no fixed UID (unlike the source cluster): restricted-v2 assigns its own
+  # per-namespace range, a hardcoded UID would be rejected like dex-server was.
+  statefulSet:
+    securityContext:
+      pod:
+        runAsNonRoot: true
+      container:
+        runAsNonRoot: true
+
+  ha:
+    enabled: false
+
+  # static PV below (vault-pv-static / data-vault-0): reusing the existing NFS
+  # export, no dynamic provisioner on this cluster
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: "truenas-nfs"
+    mountPath: "/vault/data"
+
+  standalone:
+    enabled: true
+    config: |
+      ui = true
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "raft" {
+        path = "/vault/data"
+      }
+
+  ingress:
+    enabled: true
+    ingressClassName: "openshift-default"
+    hosts:
+      - host: "vault.tomlab.fr"
+    tls:
+      - secretName: vault-tls-cert
+        hosts:
+          - "vault.tomlab.fr"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+injector:
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 256Mi
+      cpu: 250m
+  securityContext:
+    pod:
+      runAsNonRoot: true
+    container:
+      runAsNonRoot: true
+
+ui:
+  enabled: true

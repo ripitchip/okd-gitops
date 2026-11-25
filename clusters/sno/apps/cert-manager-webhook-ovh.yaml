@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-webhook-ovh
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  project: platform
+  source:
+    chart: cert-manager-webhook-ovh
+    repoURL: https://aureq.github.io/cert-manager-webhook-ovh/
+    targetRevision: 0.9.17
+    helm:
+      values: |
+        groupName: acme.tomlab.fr
+        rbac:
+          roleType: ClusterRole
+        certManager:
+          namespace: cert-manager
+          serviceAccountName: cert-manager-release
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

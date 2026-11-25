@@ -10,6 +10,10 @@ spec:
   sourceRepos:
     - https://github.com/ripitchip/okd-gitops
     - https://helm.ngc.nvidia.com/nvidia
+    - https://charts.external-secrets.io
+    - https://helm.releases.hashicorp.com
+    - https://aureq.github.io/cert-manager-webhook-ovh/
+    - https://charts.jetstack.io
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
