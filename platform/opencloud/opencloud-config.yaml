@@ -156,10 +156,12 @@ data:
         tls_insecure: false
     groups:
       driver: "ldap"
-      ldap:
-        uri: "ldap://127.0.0.1:9236"
-        bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
-        bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
+      # like users: the LDAP block lives under drivers.ldap, not ldap
+      drivers:
+        ldap:
+          uri: "ldap://127.0.0.1:9236"
+          bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
+          bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
     idm:
       ldap_addr: "127.0.0.1:9236"
       service_user_passwords:
