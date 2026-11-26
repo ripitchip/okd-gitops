@@ -80,4 +80,14 @@ data:
         echo "initialized storage/$f"
       fi
     done
+    # 7. search index left by an older OpenCloud on this volume: refuse to open on a schema
+    #    change ("cannot open index, metadata missing") and the service is not restarted
+    #    (fatal). The index is a cache rebuilt from the storage, so the old directory is
+    #    renamed aside (kept, not deleted) and a fresh one is built on this start.
+    if [ -e /var/lib/opencloud/search/bleve ] && [ ! -e /var/lib/opencloud/search/bleve.old-$(date +%Y%m%d%H%M%S) ]; then
+      stamp=$(date +%Y%m%d%H%M%S)
+      mv /var/lib/opencloud/search/bleve "/var/lib/opencloud/search/bleve.old-$stamp"
+      rm -rf "/var/lib/opencloud/search/bleve-v5"
+      echo "old search index moved to search/bleve.old-$stamp"
+    fi
     echo "config ready"
