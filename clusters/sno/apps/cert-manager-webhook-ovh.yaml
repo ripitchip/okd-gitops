@@ -19,12 +19,20 @@ spec:
         certManager:
           namespace: cert-manager
           serviceAccountName: cert-manager-release
-        # drop upstream's fixed UID/GID 1000, let restricted-v2 assign its own
         pod:
           securityContext:
+            # drop upstream's fixed UID/GID 1000, let restricted-v2 assign its own
             pod:
               runAsUser: null
               runAsGroup: null
+            # restricted-v2 strips all capabilities by default; /app is built with
+            # the cap_net_bind_service file capability, so exec fails (EPERM)
+            # without explicitly adding it back (one of the few caps "restricted"
+            # Pod Security still allows)
+            container:
+              capabilities:
+                drop: ["ALL"]
+                add: ["NET_BIND_SERVICE"]
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
