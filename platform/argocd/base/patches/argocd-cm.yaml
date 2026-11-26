@@ -8,7 +8,7 @@ data:
   # to the new auth.tomlab.fr instance
   oidc.config: |
     name: Keycloak
-    issuer: https://auth.foobarbaz.fr/realms/foobarbaz
+    issuer: https://auth.tomlab.fr/realms/foobarbaz
     clientID: argocd
     requestedScopes:
       - openid
