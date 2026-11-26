@@ -93,12 +93,20 @@ data:
     auth_machine: {}
     auth_service: {}
     clientlog:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       events:
         endpoint: "127.0.0.1:9233"
         cluster: "opencloud-cluster"
         enable_tls: false
         tls_insecure: false
     collaboration:
+      # collaboration refuses to start without a WOPI secret and a WOPI source URL
+      # (no office app is configured: editing stays unavailable, see ADR 0005)
+      wopi:
+        secret: "__WOPI_SECRET__"
+        wopisrc: "https://cloud.tomlab.fr/wopi"
       app:
         insecure: false
     eventhistory:
@@ -125,6 +133,19 @@ data:
       spaces:
         webdav_base: "https://cloud.tomlab.fr"
         insecure: false
+      # graph reads identity.ldap (same layout as auth_basic.auth_providers.ldap): without
+      # the bind password it refuses to start ("ldap bind_password has not been set ...
+      # for graph"). ID kept for the application id of the default config.
+      identity:
+        ldap:
+          uri: "ldap://127.0.0.1:9236"
+          bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
+          bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
+      application:
+        id: "8d4b6c1e-5a3f-4e2d-9c7b-1f0a2b3c4d5e"
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       events:
         endpoint: "127.0.0.1:9233"
         cluster: "opencloud-cluster"
@@ -153,6 +174,9 @@ data:
       nats:
         tls_skip_verify_client_cert: false
     notifications:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       notifications:
         events:
           endpoint: "127.0.0.1:9233"
@@ -187,6 +211,9 @@ data:
         enable_tls: false
         tls_insecure: false
     search:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       engine:
         type: "bleve"
         bleve:
@@ -201,6 +228,8 @@ data:
         tls_insecure: false
     settings:
       admin_user_id: "7c1b0d1e-3e4f-4a5b-8c9d-1a2b3c4d5e6f"
+      metadata_config:
+        system_user_api_key: "__SYSTEM_USER_API_KEY__"
       service_account_ids:
         - "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
     sharing:
@@ -222,10 +251,15 @@ data:
     storage_shares:
       shares_provider_endpoint: "eu.opencloud.api.sharing"
     storage_system:
+      system_user_id: "0a3a1e2e-2a7b-4c31-9d0b-0f5f1f0a6c11"
+      system_user_api_key: "__SYSTEM_USER_API_KEY__"
       drivers:
         decomposed:
           root: "/var/lib/opencloud/storage/metadata"
     storage_users:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       driver: "decomposed"
       mount_id: "5d2b8a41-7f0c-4c5e-b1a2-3d4e5f6a7b8c"
       data_server_url: "http://127.0.0.1:9158/data"
@@ -239,6 +273,9 @@ data:
         tls_insecure: false
     thumbnails: {}
     userlog:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       events:
         endpoint: "127.0.0.1:9233"
         cluster: "opencloud-cluster"
@@ -246,10 +283,11 @@ data:
         tls_insecure: false
     users:
       driver: "ldap"
-      ldap:
-        uri: "ldap://127.0.0.1:9236"
-        bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
-        bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
+      drivers:
+        ldap:
+          uri: "ldap://127.0.0.1:9236"
+          bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
+          bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
     web: {}
     webdav: {}
     webfinger:

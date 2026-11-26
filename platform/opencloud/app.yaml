@@ -90,6 +90,9 @@ spec:
             - name: CALSHARE_SECRET
               valueFrom:
                 secretKeyRef: { name: opencloud-secrets, key: CALSHARE_PROXY_SECRET }
+            - name: WOPI_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: WOPI_SECRET }
             - name: OC_URL
               value: "https://cloud.tomlab.fr"
             - name: OIDC_ISSUER
@@ -235,6 +238,18 @@ spec:
             # apps directory, no entry needed)
             - name: WEB_UI_CONFIG_FILE
               value: "/var/lib/opencloud/config/config.json"
+            # the proxy section of opencloud.yaml is rendered from proxy-routes.yaml: these
+            # three secrets are only read from the environment (proxy validation fails
+            # without them). The URL signing secret also comes from the shared config.
+            - name: TRANSFER_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: TRANSFER_SECRET }
+            - name: MACHINE_AUTH_API_KEY
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: MACHINE_AUTH_API_KEY }
+            - name: URL_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: URL_SIGNING_SECRET }
             - name: IDM_CREATE_DEMO_USERS
               value: "false"
             # used only when the IDM database is created (first start): keep in sync with
