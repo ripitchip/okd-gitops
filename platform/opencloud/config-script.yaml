@@ -61,16 +61,20 @@ data:
     yq eval -i '.proxy.role_assignment = load("/opt/opencloud-role-mapping/role_assignment.yaml").role_assignment' /tmp/opencloud.yaml
 
     # 4. secrets of the file itself (the services read opencloud.yaml, not the env:
-    #    jwt_secret, machine auth key, IDM passwords...), then write it
+    #    jwt_secret, machine auth key, IDM passwords...). Written atomically: the running
+    #    process re-reads this file, it must never be missing (a missing file left the
+    #    router without the "/" route: every page answered 500).
     render /tmp/opencloud.yaml > /tmp/rendered.yaml
     chmod 600 /tmp/rendered.yaml
     if ! cmp -s /tmp/rendered.yaml "$out/opencloud.yaml"; then
-      cat /tmp/rendered.yaml > "$out/opencloud.yaml"
+      cp /tmp/rendered.yaml "$out/opencloud.yaml.tmp"
+      mv "$out/opencloud.yaml.tmp" "$out/opencloud.yaml"
       echo "opencloud.yaml updated"
     fi
 
     # 5. web UI config
-    render /etc/opencloud-web-config/config.json.tmpl > "$out/config.json"
+    render /etc/opencloud-web-config/config.json.tmpl > "$out/config.json.tmp"
+    mv "$out/config.json.tmp" "$out/config.json"
 
     # 6. JSON stores found empty on this volume (a 0-byte ocmshares.json / ocminvites.json
     #    makes the ocm service fail with "unexpected end of JSON input" and restart
@@ -82,10 +86,9 @@ data:
         echo "initialized storage/$f"
       fi
     done
-    # 7. search index left by an older OpenCloud on this volume: refuse to open on a schema
-    #    change ("cannot open index, metadata missing") and the service is not restarted
-    #    (fatal). The index is a cache rebuilt from the storage, so the old directory is
-    #    renamed aside (kept, not deleted) and a fresh one is built on this start.
+    # 7. search index: rebuilt from the storage at every start, so a stale one (bleve,
+    #    from an older OpenCloud: "cannot open index, metadata missing" is fatal) is
+    #    renamed aside, kept, and a fresh bleve-v<N> is created on this start.
     if [ -e /var/lib/opencloud/search/bleve ]; then
       stamp=$(date +%Y%m%d%H%M%S)
       mv /var/lib/opencloud/search/bleve "/var/lib/opencloud/search/bleve.old-$stamp"
