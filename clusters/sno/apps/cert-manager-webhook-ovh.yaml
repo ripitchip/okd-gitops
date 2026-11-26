@@ -7,32 +7,55 @@ metadata:
     argocd.argoproj.io/sync-wave: "6"
 spec:
   project: platform
-  source:
-    chart: cert-manager-webhook-ovh
-    repoURL: https://aureq.github.io/cert-manager-webhook-ovh/
-    targetRevision: 0.9.17
-    helm:
-      values: |
-        groupName: acme.tomlab.fr
-        rbac:
-          roleType: ClusterRole
-        certManager:
-          namespace: cert-manager
-          serviceAccountName: cert-manager-release
-        pod:
-          securityContext:
-            # drop upstream's fixed UID/GID 1000, let restricted-v2 assign its own
-            pod:
-              runAsUser: null
-              runAsGroup: null
-            # restricted-v2 strips all capabilities by default; /app is built with
-            # the cap_net_bind_service file capability, so exec fails (EPERM)
-            # without explicitly adding it back (one of the few caps "restricted"
-            # Pod Security still allows)
-            container:
-              capabilities:
-                drop: ["ALL"]
-                add: ["NET_BIND_SERVICE"]
+  sources:
+    - chart: cert-manager-webhook-ovh
+      repoURL: https://aureq.github.io/cert-manager-webhook-ovh/
+      targetRevision: 0.9.17
+      helm:
+        values: |
+          groupName: acme.tomlab.fr
+          rbac:
+            roleType: ClusterRole
+          certManager:
+            namespace: cert-manager
+            serviceAccountName: cert-manager-release
+          pod:
+            securityContext:
+              # drop upstream's fixed UID/GID 1000, let restricted-v2 assign its own
+              pod:
+                runAsUser: null
+                runAsGroup: null
+              # restricted-v2 strips all capabilities by default; /app is built with
+              # the cap_net_bind_service file capability, so exec fails (EPERM)
+              # without explicitly adding it back (one of the few caps "restricted"
+              # Pod Security still allows)
+              container:
+                capabilities:
+                  drop: ["ALL"]
+                  add: ["NET_BIND_SERVICE"]
+          # real Let's Encrypt cert via OVH DNS-01; credentials come from Vault via
+          # the ExternalSecret below (ovh-credentials secret), never in git
+          issuers:
+            - name: letsencrypt-prod
+              create: true
+              kind: ClusterIssuer
+              acmeServerUrl: https://acme-v02.api.letsencrypt.org/directory
+              email: thomas@tomlab.fr
+              ovhEndpointName: ovh-eu
+              ovhAuthenticationMethod: application
+              ovhAuthenticationRef:
+                applicationKeyRef:
+                  name: ovh-credentials
+                  key: applicationKey
+                applicationSecretRef:
+                  name: ovh-credentials
+                  key: applicationSecret
+                applicationConsumerKeyRef:
+                  name: ovh-credentials
+                  key: applicationConsumerKey
+    - repoURL: https://github.com/ripitchip/okd-gitops
+      targetRevision: main
+      path: platform/cert-manager-webhook-ovh/ovh-dns-secret
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
