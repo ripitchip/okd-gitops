@@ -113,7 +113,11 @@ data:
       ocdav:
         insecure: false
         public_url: "https://cloud.tomlab.fr"
-    gateway: {}
+    gateway:
+      storage_registry:
+        driver: "spaces"
+        # same value as storage_users.mount_id: the gateway refuses to start without it
+        storage_users_mount_id: "5d2b8a41-7f0c-4c5e-b1a2-3d4e5f6a7b8c"
     graph:
       spaces:
         webdav_base: "https://cloud.tomlab.fr"
