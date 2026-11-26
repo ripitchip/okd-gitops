@@ -8,3 +8,4 @@ resources:
   - apps/cert-manager-webhook-ovh.yaml
   - apps/gpu-operator-prereqs.yaml
   - apps/gpu-operator.yaml
+  - apps/vaultwarden.yaml

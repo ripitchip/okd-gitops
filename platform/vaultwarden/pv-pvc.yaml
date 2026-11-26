@@ -1,0 +1,37 @@
+# reuses the pre-existing NFS export from the previous cluster build (data kept across rebuild)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vaultwarden-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/vaultwarden-pass"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vaultwarden-data
+  namespace: vaultwarden
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: vaultwarden-pv-static
