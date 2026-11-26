@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - pvc.yaml
   - scc-rbac.yaml
+  - openldap-scc.yaml
   - externalsecrets.yaml
   - postgres.yaml
   - openldap.yaml

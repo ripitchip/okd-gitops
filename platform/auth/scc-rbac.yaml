@@ -1,6 +1,8 @@
-# postgres and openldap each need a one-time root chown of their NFS-mounted
-# subdirectory (fixed UID carried over from the original cluster); same
-# pattern as platform/gpu-operator/prereqs/base/scc-rbac.yaml
+# postgres needs a one-time root chown of its NFS-mounted subdirectory (fixed
+# UID carried over from the original cluster); same pattern as
+# platform/gpu-operator/prereqs/base/scc-rbac.yaml.
+# openldap needs anyuid *and* NET_BIND_SERVICE at once, which anyuid alone
+# can't grant — see openldap-scc.yaml for its dedicated SCC.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -13,7 +15,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: postgres
-    namespace: auth
-  - kind: ServiceAccount
-    name: openldap
     namespace: auth
