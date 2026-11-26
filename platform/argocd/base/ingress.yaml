@@ -1,0 +1,28 @@
+# argocd-server handles its own TLS normally, but it's set to --insecure here
+# (patches/argocd-cmd-params-cm.yaml) so the router can terminate with a real
+# Let's Encrypt cert instead of argocd-server's self-signed one (edge, not
+# passthrough). Converted to a Route automatically (openshift.io/ingress-to-route),
+# which also syncs the cert-manager-issued secret into the Route's TLS fields.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: openshift-default
+  tls:
+    - hosts:
+        - argocd.tomlab.fr
+      secretName: argocd-tls-cert
+  rules:
+    - host: argocd.tomlab.fr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80

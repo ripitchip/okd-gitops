@@ -1,0 +1,8 @@
+# serve plain HTTP: TLS is now terminated at the router (edge route + real
+# Let's Encrypt cert), not by argocd-server's own self-signed cert
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+data:
+  server.insecure: "true"

@@ -5,10 +5,11 @@ namespace: argocd
 resources:
   - namespace.yaml
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml
-  - route.yaml
+  - ingress.yaml
   - projects/platform.yaml
 
 patches:
   - path: patches/redis-arbitrary-uid.yaml
   - path: patches/dex-arbitrary-uid.yaml
   - path: patches/argocd-cm.yaml
+  - path: patches/argocd-cmd-params-cm.yaml
