@@ -49,8 +49,10 @@ data:
 
     # 1. opencloud.yaml: template + proxy policy
     yq eval '.' /etc/opencloud-config/opencloud.yaml.tmpl > /tmp/opencloud.yaml
-    # (a bare sequence on the command line is kept nested: pass it as a map)
-    yq eval -i '.proxy.policies = [(load("/opt/opencloud-proxy/policy.yaml") | {"policy": .}).policy] | .proxy.policies |= [.[0][0]]' /tmp/opencloud.yaml
+    # the policy file is ONE mapping (name: default, routes: [...]): load() alone puts it
+    # in the list as is. The former `| {"policy": .}).policy` form returned null: the
+    # router then logged "policy is not configured" and every request got a 500.
+    yq eval -i '.proxy.policies = [load("/opt/opencloud-proxy/policy.yaml")]' /tmp/opencloud.yaml
 
     # 2. calendar routes (calshare gate + sidecar), first
     yq eval -i '.proxy.policies[0].routes = load("/opt/opencloud-calendar-proxy/caldav_routes.yaml").routes + .proxy.policies[0].routes' /tmp/opencloud.yaml
