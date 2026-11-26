@@ -29,9 +29,22 @@ data:
     out=/var/lib/opencloud/config
     mkdir -p "$out"
 
-    # __NAME__ -> value of the variable of the same name (busybox envsubst)
+    # __NAME__ -> value of the variable of the same name. awk reads the environment
+    # directly: the image (Alpine + busybox + yq) has no envsubst, no perl, no bash.
     render() {
-      sed -E 's/__([A-Z0-9_]+)__/$\{\1}/g' "$1" | envsubst
+      awk '
+        function env(name,   v) { v = ENVIRON[name]; return (v == "" ? "" : v) }
+        {
+          line = $0
+          out = ""
+          while (match(line, /__[A-Z0-9_]+__/)) {
+            token = substr(line, RSTART, RLENGTH)
+            out = out substr(line, 1, RSTART - 1) env(substr(token, 3, RLENGTH - 4))
+            line = substr(line, RSTART + RLENGTH)
+          }
+          print out line
+        }
+      ' "$1"
     }
 
     # 1. opencloud.yaml: template + proxy policy
