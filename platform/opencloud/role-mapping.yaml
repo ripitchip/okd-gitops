@@ -19,7 +19,13 @@ data:
       oidc_role_mapper:
         role_claim: groups
         role_mapping:
+          # both forms: Keycloak's "Group Membership" mapper with "Full group path"
+          # enabled prefixes the group names with "/"
           - role_name: admin
             claim_value: opencloudAdmin
+          - role_name: admin
+            claim_value: /opencloudAdmin
           - role_name: user
             claim_value: opencloudUser
+          - role_name: user
+            claim_value: /opencloudUser

@@ -91,7 +91,10 @@ data:
         enable_tls: false
         tls_insecure: false
     auth_machine: {}
-    auth_service: {}
+    auth_service:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
     clientlog:
       service_account:
         service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"

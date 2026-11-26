@@ -110,6 +110,7 @@ spec:
           args: ["--hosts", "127.0.0.1:5232"]
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
             runAsNonRoot: true
