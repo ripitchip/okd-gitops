@@ -86,13 +86,16 @@ data:
         echo "initialized storage/$f"
       fi
     done
-    # 7. search index: rebuilt from the storage at every start, so a stale one (bleve,
-    #    from an older OpenCloud: "cannot open index, metadata missing" is fatal) is
-    #    renamed aside, kept, and a fresh bleve-v<N> is created on this start.
-    if [ -e /var/lib/opencloud/search/bleve ]; then
-      stamp=$(date +%Y%m%d%H%M%S)
-      mv /var/lib/opencloud/search/bleve "/var/lib/opencloud/search/bleve.old-$stamp"
-      rm -rf "/var/lib/opencloud/search/bleve-v5"
-      echo "old search index moved to search/bleve.old-$stamp"
-    fi
+    # 7. search index: rebuilt from the storage at every start. A stale one is fatal
+    #    ("cannot open index, metadata missing" and the service is NOT restarted):
+    #    before v8 it lived in search/bleve, from v8 in search/bleve-v<N>. Both are
+    #    renamed aside here (kept), a fresh index is created on this start.
+    mkdir -p /var/lib/opencloud/search
+    stamp=$(date +%Y%m%d%H%M%S)
+    for d in /var/lib/opencloud/search/bleve /var/lib/opencloud/search/bleve-v*; do
+      case "$d" in *.old-*|*.old) continue ;; esac
+      [ -e "$d" ] || continue
+      mv "$d" "${d}.old-$stamp"
+      echo "old search index moved to ${d##*/}.old-$stamp"
+    done
     echo "config ready"
