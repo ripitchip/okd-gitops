@@ -72,10 +72,13 @@ data:
         tls_insecure: false
     auth_app: {}
     auth_basic:
-      ldap:
-        uri: "ldap://127.0.0.1:9236"
-        bind_dn: "uid=reva,ou=sysusers,o=libregraph-idm"
-        bind_password: "__IDM_REVA_PASSWORD__"
+      # key is auth_providers.ldap (not ldap: the service refuses to start otherwise,
+      # "ldap bind_password has not been set properly ... for auth-basic")
+      auth_providers:
+        ldap:
+          uri: "ldap://127.0.0.1:9236"
+          bind_dn: "uid=reva,ou=sysusers,o=libregraph-idm"
+          bind_password: "__IDM_REVA_PASSWORD__"
     auth_bearer:
       oidc:
         issuer: "https://auth.tomlab.fr/realms/foobarbaz"
@@ -157,9 +160,11 @@ data:
           enable_tls: false
           tls_insecure: false
     ocm:
+      # keys are service_account_id / service_account_secret (ocm uses its own
+      # ServiceAccount type: the proxy-style id/secret keys are ignored)
       service_account:
-        id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
-        secret: "__SERVICE_ACCOUNT_SECRET__"
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
       events:
         endpoint: "127.0.0.1:9233"
         cluster: "opencloud-cluster"
