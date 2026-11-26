@@ -1,0 +1,329 @@
+# OpenCloud 9.1.0, single "opencloud server" runtime process (all services in one pod, like
+# the upstream docker-compose), plus the calendar stack in its own pod (radicale.yaml).
+#
+# No `opencloud init` here: it writes opencloud.yaml (random JWT secret, service account,
+# IDM passwords...) once per volume. With an empty volume (or a new pod) that is a new IDM
+# database with new secrets every time: sessions, sync clients and the local admin break.
+# The config is versioned instead (opencloud-config.yaml), its secrets come from Vault
+# (externalsecret.yaml), and the initContainer "opencloud-config" renders it on every
+# start, so the ConfigMap is the source of truth.
+#
+# Template rendering (opencloud.yaml.tmpl, config.json.tmpl) and merging the proxy routes
+# need yq and bash: done in a yq image, the opencloud image only has the binary.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opencloud
+  namespace: opencloud
+spec:
+  selector:
+    app: opencloud
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opencloud
+  namespace: opencloud
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: opencloud
+  template:
+    metadata:
+      labels:
+        app: opencloud
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Template opencloud.yaml.tmpl / config.json.tmpl with the Vault secrets, merge the
+        # proxy routes over the built-in proxy defaults, write both to the data volume.
+        # The rendered opencloud.yaml (secrets included) is rewritten on every start: the
+        # ConfigMap is the source of truth, it must be changed to change the config.
+        - name: opencloud-config
+          image: docker.io/mikefarah/yq:4.44.3
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              out=/var/lib/opencloud/config
+              mkdir -p "$out"
+              # __NAME__ -> value of the variable of the same name (envsubst: base image)
+              render() {
+                sed -E 's/__([A-Z0-9_]+)__/$\{\1}/g' "$1" | envsubst
+              }
+              # 1. opencloud.yaml: defaults of this image + proxy section
+              #    (proxy.policies[0] is the "default" policy: its routes are the built-in
+              #    ones, init's empty `proxy: {}` would leave a single "/" -> web route)
+              yq eval '.' /etc/opencloud-config/opencloud.yaml.tmpl > /tmp/opencloud.yaml
+              # (a bare sequence on the command line is kept nested: pass it as a map)
+              yq eval '.proxy.policies = [(load("/opt/opencloud-proxy/policy.yaml") | {"policy": .}).policy] | .proxy.policies |= [.[0][0]]' -i /tmp/opencloud.yaml
+              # 2. calendar routes (calshare gate + sidecar) first: routes match in order
+              #    (load(), never a second file: yq appends a second document here)
+              yq eval -i '.proxy.policies[0].routes = load("/opt/opencloud-calendar-proxy/caldav_routes.yaml").routes + .proxy.policies[0].routes' \
+                /tmp/opencloud.yaml
+              # 3. role assignment from the Keycloak groups claim
+              yq eval -i '.proxy.role_assignment = load("/opt/opencloud-role-mapping/role_assignment.yaml").role_assignment' \
+                /tmp/opencloud.yaml
+              # 4. secrets of the file itself (the services read opencloud.yaml, not the
+              #    env: jwt_secret, machine auth key, IDM passwords...)
+              render /tmp/opencloud.yaml > /tmp/rendered.yaml
+              chmod 600 /tmp/rendered.yaml
+              if ! cmp -s /tmp/rendered.yaml "$out/opencloud.yaml"; then
+                cat /tmp/rendered.yaml > "$out/opencloud.yaml"
+                echo "opencloud.yaml updated"
+              fi
+              # 5. web UI config
+              render /etc/opencloud-web-config/config.json.tmpl > "$out/config.json"
+              echo "config ready"
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: JWT_SECRET }
+            - name: MACHINE_AUTH_API_KEY
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: MACHINE_AUTH_API_KEY }
+            - name: TRANSFER_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: TRANSFER_SECRET }
+            - name: URL_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: URL_SIGNING_SECRET }
+            - name: SYSTEM_USER_API_KEY
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: SYSTEM_USER_API_KEY }
+            - name: SERVICE_ACCOUNT_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: SERVICE_ACCOUNT_SECRET }
+            - name: IDM_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_ADMIN_PASSWORD }
+            - name: IDM_IDM_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_IDM_PASSWORD }
+            - name: IDM_REVA_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_REVA_PASSWORD }
+            - name: IDM_IDP_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_IDP_PASSWORD }
+            - name: IDM_LIBREGRAPH_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_IDM_PASSWORD }
+            - name: CALSHARE_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: CALSHARE_PROXY_SECRET }
+            - name: OC_URL
+              value: "https://cloud.tomlab.fr"
+            - name: OIDC_ISSUER
+              value: "https://auth.tomlab.fr/realms/foobarbaz"
+            - name: ACCOUNT_URL
+              value: "https://auth.tomlab.fr/realms/foobarbaz/account"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/opencloud
+            - name: opencloud-config
+              mountPath: /etc/opencloud-config
+              readOnly: true
+            - name: proxy-routes
+              mountPath: /opt/opencloud-proxy
+              readOnly: true
+            - name: calendar-proxy
+              mountPath: /opt/opencloud-calendar-proxy
+              readOnly: true
+            - name: role-mapping
+              mountPath: /opt/opencloud-role-mapping
+              readOnly: true
+            - name: web-config
+              mountPath: /etc/opencloud-web-config
+              readOnly: true
+        # Web extensions dropped into the apps directory, sha256-verified (see the comments
+        # in each step). Idempotent: the leftovers are removed and the archive re-extracted
+        # on every start.
+        - name: install-extensions
+          image: docker.io/python:3.13-alpine
+          command: ["python3", "-c"]
+          args:
+            - |
+              import hashlib, io, shutil, urllib.request, zipfile
+
+              target = "/var/lib/opencloud/web/assets/apps"
+              # https://github.com/paulmascarilla/opencloud-calendar-share v0.5.0: calendar
+              # app, needs the calshare sidecar (/calshare/v1, see radicale.yaml)
+              extensions = [
+                  (
+                      "https://github.com/paulmascarilla/opencloud-calendar-share/releases/download/v0.5.0/calendar-0.5.0.zip",
+                      "6e8adc3ab964f57d39b89b767cb25422df20f14e5dd3552c0d8b440e4dc9f60a",
+                      ["calendar", "web-calendar"],
+                  ),
+                  # https://github.com/opencloud-eu/web-extensions draw-io-v2.2.0 (official,
+                  # same org as OpenCloud); CSP already allows embed.diagrams.net
+                  (
+                      "https://github.com/opencloud-eu/web-extensions/releases/download/draw-io-v2.2.0/draw-io-2.2.0.zip",
+                      "49c3aa32aa517f2a90f249b5470b38dc18b7d006841c442f64335d660b551d0c",
+                      ["draw-io"],
+                  ),
+              ]
+              for url, expected_sha256, dirs in extensions:
+                  data = urllib.request.urlopen(url).read()
+                  digest = hashlib.sha256(data).hexdigest()
+                  assert digest == expected_sha256, f"sha256 mismatch for {url}: got {digest}"
+                  for d in dirs:
+                      shutil.rmtree(f"{target}/{d}", ignore_errors=True)
+                  zipfile.ZipFile(io.BytesIO(data)).extractall(target)
+              print("web extensions installed")
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/opencloud
+      containers:
+        - name: opencloud
+          image: docker.io/opencloudeu/opencloud-rolling:9.1.0
+          command: ["/usr/bin/opencloud"]
+          args: ["server"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            # the runtime reads <config dir>/opencloud.yaml, written by opencloud-config
+            - name: OC_CONFIG_DIR
+              value: "/var/lib/opencloud/config"
+            - name: OC_BASE_DATA_PATH
+              value: "/var/lib/opencloud"
+            - name: OC_URL
+              value: "https://cloud.tomlab.fr"
+            # TLS terminates at the ingress (Route): the proxy listens on plain http
+            - name: PROXY_TLS
+              value: "false"
+            - name: PROXY_HTTP_ADDR
+              value: "0.0.0.0:9200"
+            - name: OC_INSECURE
+              value: "false"
+            - name: OC_LOG_LEVEL
+              value: "info"
+            # --- OIDC: external Keycloak (public client "web" of the realm) ---
+            - name: OC_OIDC_ISSUER
+              value: "https://auth.tomlab.fr/realms/foobarbaz"
+            - name: OC_OIDC_CLIENT_ID
+              value: "web"
+            # the built-in IDP is replaced by Keycloak, the IDM (internal LDAP) stays
+            - name: OC_EXCLUDE_RUN_SERVICES
+              value: "idp"
+            - name: PROXY_OIDC_REWRITE_WELLKNOWN
+              value: "true"
+            - name: PROXY_USER_OIDC_CLAIM
+              value: "preferred_username"
+            - name: PROXY_USER_CS3_CLAIM
+              value: "username"
+            # accounts are created in the IDM on first login
+            - name: PROXY_AUTOPROVISION_ACCOUNTS
+              value: "true"
+            - name: OC_LDAP_SERVER_WRITE_ENABLED
+              value: "true"
+            - name: GRAPH_USERNAME_MATCH
+              value: "none"
+            # role from the Keycloak groups claim (role-mapping.yaml)
+            - name: PROXY_ROLE_ASSIGNMENT_DRIVER
+              value: "oidc"
+            - name: PROXY_ROLE_ASSIGNMENT_OIDC_CLAIM
+              value: "groups"
+            - name: GRAPH_ASSIGN_DEFAULT_USER_ROLE
+              value: "true"
+            - name: WEB_OPTION_ACCOUNT_EDIT_LINK_HREF
+              value: "https://auth.tomlab.fr/realms/foobarbaz/account"
+            # the browser must be able to reach Keycloak (connect-src / frame-src)
+            - name: PROXY_CSP_CONFIG_FILE_LOCATION
+              value: "/etc/opencloud-csp/csp.yaml"
+            # replaces the auto-generated web config.json (external_apps come from the
+            # apps directory, no entry needed)
+            - name: WEB_UI_CONFIG_FILE
+              value: "/var/lib/opencloud/config/config.json"
+            - name: IDM_CREATE_DEMO_USERS
+              value: "false"
+            # used only when the IDM database is created (first start): keep in sync with
+            # idm.service_user_passwords in opencloud-config.yaml
+            - name: IDM_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_ADMIN_PASSWORD }
+            - name: IDM_SVC_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_IDM_PASSWORD }
+            - name: IDM_REVASVC_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_REVA_PASSWORD }
+            - name: IDM_IDPSVC_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: IDM_IDP_PASSWORD }
+          ports:
+            - containerPort: 9200
+              name: http
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/opencloud
+            - name: csp
+              mountPath: /etc/opencloud-csp
+              readOnly: true
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: 100m
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: opencloud-data
+        - name: opencloud-config
+          configMap:
+            name: opencloud-config
+        - name: proxy-routes
+          configMap:
+            name: opencloud-proxy-routes
+        - name: calendar-proxy
+          configMap:
+            name: opencloud-calendar-proxy
+        - name: role-mapping
+          configMap:
+            name: opencloud-role-mapping
+        - name: web-config
+          configMap:
+            name: opencloud-web-config
+        - name: csp
+          configMap:
+            name: opencloud-csp

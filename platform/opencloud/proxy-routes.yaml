@@ -1,0 +1,178 @@
+# Render target: one rule, "default" (proxy's built-in policy of the same name), rendered
+# over the defaults so endpoints match their purpose again.
+#
+# `opencloud init` writes an EMPTY `proxy: {}` section into opencloud.yaml, which overrides
+# the built-in routes wholesale. Rendered over the default config, the result is a policy
+# with a single `/` -> web route: no /graph, /dav, /ocs, /app... anywhere, login and sync
+# included. Listing the routes here is what restores them; anything added later (yjs, ...)
+# goes in this file too.
+#
+# initContainers render this file (defaults + routes), so the built-in defaults of the
+# image version (v9.1.0, see services/proxy/pkg/config/defaults/defaultconfig.go) are
+# always the base. Re-check this file when upgrading OpenCloud: new default routes have
+# to be added here by hand.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-proxy-routes
+  namespace: opencloud
+data:
+  policy.yaml: |
+    name: default
+    routes:
+      - endpoint: /
+        service: eu.opencloud.web.web
+        unprotected: true
+      - endpoint: /.well-known/ocm
+        service: eu.opencloud.web.ocm
+        unprotected: true
+      - endpoint: /.well-known/webfinger
+        service: eu.opencloud.web.webfinger
+        unprotected: true
+      - endpoint: /.well-known/openid-configuration
+        service: eu.opencloud.web.idp
+        unprotected: true
+      - endpoint: /branding/logo
+        service: eu.opencloud.web.web
+      - endpoint: /announcement
+        service: eu.opencloud.web.web
+      - endpoint: /konnect/
+        service: eu.opencloud.web.idp
+        unprotected: true
+      - endpoint: /signin/
+        service: eu.opencloud.web.idp
+        unprotected: true
+      - endpoint: /archiver
+        service: eu.opencloud.web.frontend
+      - endpoint: /ocs/v2.php/apps/notifications/api/v1/notifications/sse
+        service: eu.opencloud.sse.sse
+      - endpoint: /ocs/v2.php/apps/notifications/api/v1/notifications
+        service: eu.opencloud.web.userlog
+      - type: regex
+        endpoint: /ocs/v[12].php/cloud/user/signing-key
+        service: eu.opencloud.web.ocs
+      - type: regex
+        endpoint: /ocs/v[12].php/config
+        service: eu.opencloud.web.frontend
+        unprotected: true
+      - endpoint: /sciencemesh/federations
+        service: eu.opencloud.web.ocm
+        unprotected: true
+      - endpoint: /sciencemesh/discover
+        service: eu.opencloud.web.ocm
+        unprotected: true
+      - endpoint: /sciencemesh/
+        service: eu.opencloud.web.ocm
+      - endpoint: /ocm/
+        service: eu.opencloud.web.ocm
+      - endpoint: /ocs/
+        service: eu.opencloud.web.frontend
+      - type: query
+        endpoint: /remote.php/?preview=1
+        service: eu.opencloud.web.webdav
+      - type: regex
+        method: REPORT
+        endpoint: (/remote.php)?/(web)?dav
+        service: eu.opencloud.web.webdav
+      - type: query
+        endpoint: /dav/?preview=1
+        service: eu.opencloud.web.webdav
+      - type: query
+        endpoint: /webdav/?preview=1
+        service: eu.opencloud.web.webdav
+      - endpoint: /remote.php/
+        service: eu.opencloud.web.frontend
+      - endpoint: /dav/
+        service: eu.opencloud.web.frontend
+      - endpoint: /webdav/
+        service: eu.opencloud.web.frontend
+      - endpoint: /status
+        service: eu.opencloud.web.frontend
+        unprotected: true
+      - endpoint: /status.php
+        service: eu.opencloud.web.frontend
+        unprotected: true
+      - endpoint: /index.php/
+        service: eu.opencloud.web.frontend
+      - endpoint: /apps/
+        service: eu.opencloud.web.frontend
+      - endpoint: /app/list
+        service: eu.opencloud.web.frontend
+        unprotected: true
+      - endpoint: /app/
+        service: eu.opencloud.web.frontend
+      - endpoint: /graph/v1beta1/extensions/org.libregraph/activities
+        service: eu.opencloud.web.activitylog
+      - endpoint: /graph/v1.0/invitations
+        service: eu.opencloud.web.invitations
+      - endpoint: /graph/v1beta1/extensions/org.libregraph/guestLinks
+        service: eu.opencloud.web.auth-guest
+        unprotected: true
+      - endpoint: /graph/
+        service: eu.opencloud.web.graph
+      - endpoint: /api/v0/settings
+        service: eu.opencloud.web.settings
+      - endpoint: /auth-app/tokens
+        service: eu.opencloud.web.auth-app
+      - endpoint: /wopi
+        service: eu.opencloud.web.collaboration
+        unprotected: true
+        skip_x_access_token: true
+      - endpoint: /collaboration
+        service: eu.opencloud.web.collaboration
+---
+# Routes of the calendar stack (Radicale + calshare sidecar), see radicale.yaml.
+#
+# Merged (yq, initContainer "opencloud-config") into proxy.policies[0].routes, i.e. into
+# the "default" policy rendered from opencloud-proxy-routes: routes are matched in order,
+# so they are added first and win over the catch-all /dav/ and / remote.php/ routes.
+#
+# CalDAV/CardDAV go to calshare's gate (5233), not to Radicale: Radicale only listens on
+# 127.0.0.1 inside the radicale pod, and the gate checks X-Calshare-Secret before
+# forwarding with X-Remote-User. /calshare/ is the sidecar API used by the calendar web app.
+#
+# X-Calshare-Secret: the placeholder below is substituted by the real value (Secret
+# opencloud-secrets, key CALSHARE_PROXY_SECRET, from Vault) by the initContainer before the
+# merge. The real secret never lives in this ConfigMap (public repo).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-calendar-proxy
+  namespace: opencloud
+data:
+  caldav_routes.yaml: |
+    routes:
+      - endpoint: /caldav/
+        backend: http://opencloud-radicale.opencloud.svc.cluster.local:5233
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          X-Script-Name: /caldav
+          X-Calshare-Secret: __CALSHARE_SECRET__
+      - endpoint: /.well-known/caldav
+        backend: http://opencloud-radicale.opencloud.svc.cluster.local:5233
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          X-Script-Name: /caldav
+          X-Calshare-Secret: __CALSHARE_SECRET__
+      - endpoint: /carddav/
+        backend: http://opencloud-radicale.opencloud.svc.cluster.local:5233
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          X-Script-Name: /carddav
+          X-Calshare-Secret: __CALSHARE_SECRET__
+      - endpoint: /.well-known/carddav
+        backend: http://opencloud-radicale.opencloud.svc.cluster.local:5233
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          X-Script-Name: /carddav
+          X-Calshare-Secret: __CALSHARE_SECRET__
+      - endpoint: /calshare/
+        backend: http://opencloud-radicale.opencloud.svc.cluster.local:8080
+        remote_user_header: X-Remote-User
+        skip_x_access_token: true
+        additional_headers:
+          X-Calshare-Secret: __CALSHARE_SECRET__

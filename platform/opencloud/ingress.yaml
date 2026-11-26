@@ -1,0 +1,26 @@
+# converted to a Route automatically (openshift.io/ingress-to-route), which also
+# syncs the cert-manager-issued secret into the Route's TLS fields
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opencloud
+  namespace: opencloud
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: openshift-default
+  rules:
+    - host: cloud.tomlab.fr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: opencloud
+                port:
+                  number: 9200
+  tls:
+    - hosts:
+        - cloud.tomlab.fr
+      secretName: opencloud-tls-cert

@@ -1,0 +1,76 @@
+# reuses the pre-existing NFS export from the previous cluster build (data kept across rebuild)
+# /var/lib/opencloud: idm database, storage, search index, nats, web extensions
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: opencloud-data-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/opencloud-data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencloud-data
+  namespace: opencloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: opencloud-data-pv-static
+---
+# Radicale data + calshare's invitation index (same volume, like the upstream deployment)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: opencloud-radicale-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/opencloud-radicale-data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencloud-radicale-data
+  namespace: opencloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  volumeName: opencloud-radicale-pv-static

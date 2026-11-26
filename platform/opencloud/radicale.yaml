@@ -1,0 +1,221 @@
+# Radicale + the calshare sidecar in one pod, from opencloud-calendar-share v0.5.0
+# (https://github.com/paulmascarilla/opencloud-calendar-share, AGPL-3.0). Two containers
+# sharing one network namespace: calshare's CalDAV gate reaches Radicale on 127.0.0.1 and
+# nothing else can (Radicale does not listen on the pod IP).
+#
+# - Radicale only listens on 127.0.0.1:5232. Clients come through calshare's gate
+#   (caldav/carddav ports below), which checks X-Calshare-Secret (set by the OpenCloud
+#   proxy, see proxy-routes.yaml), strips it, and forwards with X-Remote-User.
+# - calshare serves /calshare/v1 for the calendar web app (sharing, invitations,
+#   availability) and talks to OpenCloud's Graph API with the user's own token.
+# - The NetworkPolicy below is the second layer: only the opencloud pod may connect.
+#
+# Upstream images default to UID 1000: on this cluster the pods run with the
+# namespace's restricted-v2 UID instead (see scc.yaml), hence no runAsUser here. The data
+# volume is chowned by an init container, Radicale refuses to start on a volume it cannot
+# write (NFS export from the previous cluster).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-radicale-config
+  namespace: opencloud
+data:
+  config: |
+    [server]
+    hosts = 127.0.0.1:5232
+
+    [auth]
+    # The OpenCloud proxy authenticates users and passes their id in X-Remote-User.
+    type = http_x_remote_user
+
+    [rights]
+    type = owner_only
+
+    [storage]
+    filesystem_folder = /var/lib/radicale/collections
+    # Tells the calshare sidecar about every write (event invitations). Runs inside the
+    # write lock, so it only notifies (1 s timeout); the sidecar does the work afterwards.
+    hook = wget -q -T 1 -O /dev/null --post-data= --header=X-Calshare-Request:%(request)s --header=X-Calshare-Path:%(path)s --header=X-Calshare-To:%(to_path)s http://127.0.0.1:8080/internal/storage-changed
+    predefined_collections = {"def-addressbook":{"D:displayname":"Contacts","tag":"VADDRESSBOOK"},"def-calendar":{"C:supported-calendar-component-set":"VEVENT","D:displayname":"Calendar","ICAL:calendar-color":"#3b82f6","tag":"VCALENDAR"},"def-tasks":{"C:supported-calendar-component-set":"VTODO","D:displayname":"Tasks","ICAL:calendar-color":"#f59e0b","tag":"VCALENDAR"}}
+
+    [sharing]
+    # Calendar sharing between users (driven by calshare)
+    type = files
+    collection_by_map = true
+    collection_by_token = false
+    permit_create_map = true
+
+    [web]
+    type = none
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opencloud-radicale
+  namespace: opencloud
+spec:
+  selector:
+    app: opencloud-radicale
+  ports:
+    # CalDAV gate of calshare (routes /caldav/ and /carddav/)
+    - name: caldav
+      port: 5233
+      targetPort: caldav
+    # calshare REST API (route /calshare/)
+    - name: calshare
+      port: 8080
+      targetPort: calshare
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opencloud-radicale
+  namespace: opencloud
+spec:
+  replicas: 1
+  # Radicale locks its (ReadWriteOnce) data: never two pods
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: opencloud-radicale
+  template:
+    metadata:
+      labels:
+        app: opencloud-radicale
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # the volume comes from the previous cluster with another owner: hand it to the
+        # UID this pod runs as (OpenShift's fsGroup does not apply to NFS exports)
+        - name: fix-permissions
+          image: docker.io/library/busybox:1.36
+          command: ["sh", "-c", "chown -R $(id -u):$(id -g) /var/lib/radicale"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/radicale
+      containers:
+        - name: radicale
+          image: docker.io/opencloudeu/radicale:v3.8.1
+          args: ["--hosts", "127.0.0.1:5232"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          readinessProbe:
+            exec:
+              command: ["nc", "-z", "127.0.0.1", "5232"]
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["nc", "-z", "127.0.0.1", "5232"]
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/radicale
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/radicale
+        - name: calshare
+          image: ghcr.io/paulmascarilla/opencloud-calendar-share/calshare:0.5.0
+          env:
+            - name: RADICALE_URL
+              value: "http://127.0.0.1:5232"
+            # OpenCloud's Graph API, reached through its Service (plain http, in-cluster)
+            - name: OC_URL
+              value: "http://opencloud.opencloud.svc.cluster.local:9200"
+            - name: OC_INSECURE
+              value: "false"
+            - name: PUBLIC_URL
+              value: "https://cloud.tomlab.fr"
+            - name: AUTO_ACCEPT
+              value: "true"
+            - name: FREEBUSY
+              value: "true"
+            - name: INVITE_LANGUAGE
+              value: "fr"
+            - name: CALDAV_LISTEN
+              value: "0.0.0.0:5233"
+            - name: PROXY_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: CALSHARE_PROXY_SECRET }
+          ports:
+            - name: calshare
+              containerPort: 8080
+            # CalDAV gate to Radicale
+            - name: caldav
+              containerPort: 5233
+          # exec probes: they work whatever the NetworkPolicy lets in
+          readinessProbe:
+            exec:
+              command: ["/calshare", "check", "http://127.0.0.1:8080/healthz", "127.0.0.1:5233"]
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["/calshare", "check", "http://127.0.0.1:8080/healthz"]
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            # invitation index + catch-up scan of the collections
+            - name: data
+              mountPath: /var/lib/radicale
+      volumes:
+        - name: config
+          configMap:
+            name: opencloud-radicale-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: opencloud-radicale-data
+---
+# Radicale and calshare trust X-Remote-User: only the OpenCloud pod may talk to them.
+# (OVN-Kubernetes enforces this; the proxy secret is the second layer.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opencloud-radicale
+  namespace: opencloud
+spec:
+  podSelector:
+    matchLabels:
+      app: opencloud-radicale
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: opencloud
+      ports:
+        - port: caldav
+        - port: calshare

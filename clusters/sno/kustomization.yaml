@@ -10,3 +10,4 @@ resources:
   - apps/gpu-operator.yaml
   - apps/vaultwarden.yaml
   - apps/auth.yaml
+  - apps/opencloud.yaml

@@ -1,0 +1,25 @@
+# Role assigned to a user at login according to its Keycloak groups (claim "groups").
+#
+# Rendered over the default config (see initContainer "opencloud-config" in app.yaml),
+# merged into proxy.role_assignment.oidc_role_mapper.role_mapping: "admin" for members of
+# the Keycloak group "opencloudAdmin", "user" for members of "opencloudUser".
+#
+# The account created by `opencloud init` (admin / IDM_ADMIN_PASSWORD) is local to the
+# IDM and never seen by Keycloak, so the OpenCloud admin has to come from here: put the
+# Keycloak user in the group "opencloudAdmin". Without a matching group the default
+# driver rules (first role found) apply.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-role-mapping
+  namespace: opencloud
+data:
+  role_assignment.yaml: |
+    role_assignment:
+      oidc_role_mapper:
+        role_claim: groups
+        role_mapping:
+          - role_name: admin
+            claim_value: opencloudAdmin
+          - role_name: user
+            claim_value: opencloudUser

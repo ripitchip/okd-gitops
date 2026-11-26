@@ -1,0 +1,9 @@
+# Openshift: restricted-v2 (the default SCC) for every pod here. It assigns the pod's
+# UID/GID from the namespace's range, which is what OpenCloud 9 accepts without any
+# privileged init: no chown, no fixed UID. The data volume is chowned to that range by
+# the initContainers (OpenShift's fsGroup is not the volume owner for NFS exports).
+# Nothing to grant, the file documents the choice and the rejected alternatives:
+# - runAsUser/runAsGroup: 1000 as in the upstream docker-compose: the NFS export is not
+#   owned by 1000 on this cluster, and a fixed UID is not in the namespace range;
+# - anyuid + chown as root: needed only when the data volume carries ownership from
+#   another cluster (vaultwarden, auth here); not the case for opencloud-data.

@@ -1,0 +1,33 @@
+# config.json served by the "web" service: the WEB_UI_CONFIG_FILE content, rendered into
+# config.json by the initContainer "opencloud-config" (the file takes precedence over the
+# WEB_OPTION_* variables, so it has to list every option we rely on).
+#
+# Apps dropped into the web assets apps directory (calendar, draw-io) are discovered and
+# added to "external_apps" by the web service at startup: no entry needed here.
+# Placeholders: __OC_URL__, __OIDC_ISSUER__, __ACCOUNT_URL__ (see app.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-web-config
+  namespace: opencloud
+data:
+  config.json.tmpl: |
+    {
+      "server": "__OC_URL__/",
+      "theme": "__OC_URL__/themes/opencloud/theme.json",
+      "openIdConnect": {
+        "metadata_url": "__OIDC_ISSUER__/.well-known/openid-configuration",
+        "authority": "__OIDC_ISSUER__",
+        "client_id": "web",
+        "response_type": "code",
+        "scope": "openid profile email"
+      },
+      "apps": ["files", "search", "text-editor", "pdf-viewer", "external", "admin-settings", "epub-reader", "preview", "app-store"],
+      "options": {
+        "accountEditLink": { "href": "__ACCOUNT_URL__" },
+        "contextHelpersReadMore": true,
+        "tokenStorageLocal": true,
+        "embed": {},
+        "concurrentRequests": { "shares": {} }
+      }
+    }

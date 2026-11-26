@@ -1,0 +1,249 @@
+# Versioned opencloud.yaml, WITHOUT secrets: every __PLACEHOLDER__ is replaced by the
+# real value (Secret opencloud-secrets, from Vault) by the initContainer
+# "opencloud-config" in app.yaml before the file is written to the data volume. The
+# placeholders cover everything `opencloud init` generates randomly (JWT secret, service
+# account, machine auth key, IDM service passwords...): they have to be identical on
+# every replica and stable across restarts, otherwise sessions and the IDM break.
+#
+# One top-level key per service, like `opencloud init` (the runtime reads
+# /etc/opencloud/opencloud.yaml, `opencloud server` reads the same section). `{}` is
+# enough for services whose defaults are right. proxy is rendered separately
+# (opencloud-proxy-routes, opencloud-role-mapping, opencloud-calendar-proxy): the file
+# must NOT contain a "proxy:" key, which would override those routes.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-config
+  namespace: opencloud
+data:
+  opencloud.yaml.tmpl: |
+    shared:
+      jwt_secret: "__JWT_SECRET__"
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+      cache:
+        store: "nats-js-kv"
+        nodes:
+          - "127.0.0.1:9233"
+      grpc_client_tls: {}
+      grpc_service_tls: {}
+      http_service_tls: {}
+      reva: {}
+    opencloud_url: "https://cloud.tomlab.fr"
+    registry: "nats-js-kv"
+    token_manager:
+      jwt_secret: "__JWT_SECRET__"
+    machine_auth_api_key: "__MACHINE_AUTH_API_KEY__"
+    transfer_secret: "__TRANSFER_SECRET__"
+    url_signing_secret: "__URL_SIGNING_SECRET__"
+    system_user_id: "0a3a1e2e-2a7b-4c31-9d0b-0f5f1f0a6c11"
+    system_user_api_key: "__SYSTEM_USER_API_KEY__"
+    admin_user_id: "7c1b0d1e-3e4f-4a5b-8c9d-1a2b3c4d5e6f"
+    runtime: {}
+    activitylog:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+      store:
+        store: "nats-js-kv"
+        nodes:
+          - "127.0.0.1:9233"
+        database: "activitylog"
+    antivirus:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    app_provider:
+      external_addr: "eu.opencloud.api.app-provider"
+      driver: ""
+    app_registry: {}
+    audit:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    auth_app: {}
+    auth_basic:
+      ldap:
+        uri: "ldap://127.0.0.1:9236"
+        bind_dn: "uid=reva,ou=sysusers,o=libregraph-idm"
+        bind_password: "__IDM_REVA_PASSWORD__"
+    auth_bearer:
+      oidc:
+        issuer: "https://auth.tomlab.fr/realms/foobarbaz"
+        insecure: false
+        id_claim: "preferred_username"
+    auth_guest:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    auth_machine: {}
+    auth_service: {}
+    clientlog:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    collaboration:
+      app:
+        insecure: false
+    eventhistory:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    frontend:
+      public_url: "https://cloud.tomlab.fr"
+      app_handler:
+        insecure: false
+      archiver:
+        insecure: false
+      ocdav:
+        insecure: false
+        public_url: "https://cloud.tomlab.fr"
+    gateway: {}
+    graph:
+      spaces:
+        webdav_base: "https://cloud.tomlab.fr"
+        insecure: false
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    groups:
+      driver: "ldap"
+      ldap:
+        uri: "ldap://127.0.0.1:9236"
+        bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
+        bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
+    idm:
+      ldap_addr: "127.0.0.1:9236"
+      service_user_passwords:
+        admin_password: "__IDM_ADMIN_PASSWORD__"
+        idm_password: "__IDM_IDM_PASSWORD__"
+        reva_password: "__IDM_REVA_PASSWORD__"
+        idp_password: "__IDM_IDP_PASSWORD__"
+    idp:
+      ldap:
+        uri: "ldap://127.0.0.1:9236"
+        bind_dn: "uid=idp,ou=sysusers,o=libregraph-idm"
+        bind_password: "__IDM_IDP_PASSWORD__"
+    invitations: {}
+    nats:
+      nats:
+        tls_skip_verify_client_cert: false
+    notifications:
+      notifications:
+        events:
+          endpoint: "127.0.0.1:9233"
+          cluster: "opencloud-cluster"
+          enable_tls: false
+          tls_insecure: false
+    ocm:
+      service_account:
+        id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        secret: "__SERVICE_ACCOUNT_SECRET__"
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+    ocs: {}
+    postprocessing:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+      store:
+        store: "nats-js-kv"
+        nodes:
+          - "127.0.0.1:9233"
+    policies:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    search:
+      engine:
+        type: "bleve"
+        bleve:
+          data_path: "/var/lib/opencloud/search"
+        open_search:
+          resource_index:
+            name: "opencloud-resource"
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    settings:
+      admin_user_id: "7c1b0d1e-3e4f-4a5b-8c9d-1a2b3c4d5e6f"
+      service_account_ids:
+        - "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+    sharing:
+      service_account:
+        service_account_id: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+        service_account_secret: "__SERVICE_ACCOUNT_SECRET__"
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    sse:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    storage_public: {}
+    storage_shares:
+      shares_provider_endpoint: "eu.opencloud.api.sharing"
+    storage_system:
+      drivers:
+        decomposed:
+          root: "/var/lib/opencloud/storage/metadata"
+    storage_users:
+      driver: "decomposed"
+      mount_id: "5d2b8a41-7f0c-4c5e-b1a2-3d4e5f6a7b8c"
+      data_server_url: "http://127.0.0.1:9158/data"
+      drivers:
+        decomposed:
+          root: "/var/lib/opencloud/storage/users"
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    thumbnails: {}
+    userlog:
+      events:
+        endpoint: "127.0.0.1:9233"
+        cluster: "opencloud-cluster"
+        enable_tls: false
+        tls_insecure: false
+    users:
+      driver: "ldap"
+      ldap:
+        uri: "ldap://127.0.0.1:9236"
+        bind_dn: "uid=libregraph,ou=sysusers,o=libregraph-idm"
+        bind_password: "__IDM_LIBREGRAPH_PASSWORD__"
+    web: {}
+    webdav: {}
+    webfinger:
+      idp: "https://auth.tomlab.fr/realms/foobarbaz"
+      insecure: false
+      opencloud_url: "https://cloud.tomlab.fr"
