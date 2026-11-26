@@ -118,8 +118,11 @@ spec:
               value: "xforwarded"
             - name: KC_HOSTNAME_STRICT
               value: "false"
+            # temporary: the restored realm's client redirect URIs still point
+            # at the old domain (master-broker, etc). Switch back to
+            # auth.tomlab.fr once those are updated via the admin console.
             - name: KC_HOSTNAME
-              value: "https://auth.tomlab.fr"
+              value: "https://auth.foobarbaz.fr"
             - name: KC_DB
               value: "postgres"
             - name: KC_DB_URL_HOST
