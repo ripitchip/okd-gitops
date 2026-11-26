@@ -250,6 +250,13 @@ spec:
             - name: URL_SIGNING_SECRET
               valueFrom:
                 secretKeyRef: { name: opencloud-secrets, key: URL_SIGNING_SECRET }
+            # proxy.service_account has no config file (the section is rendered from
+            # proxy-routes.yaml): env only (OC_SERVICE_ACCOUNT_ID/SECRET via OC_ names)
+            - name: OC_SERVICE_ACCOUNT_ID
+              value: "2f8e4d0b-6b1c-4a3e-9d7f-8e9a0b1c2d3e"
+            - name: OC_SERVICE_ACCOUNT_SECRET
+              valueFrom:
+                secretKeyRef: { name: opencloud-secrets, key: SERVICE_ACCOUNT_SECRET }
             - name: IDM_CREATE_DEMO_USERS
               value: "false"
             # used only when the IDM database is created (first start): keep in sync with

@@ -69,4 +69,15 @@ data:
 
     # 5. web UI config
     render /etc/opencloud-web-config/config.json.tmpl > "$out/config.json"
+
+    # 6. JSON stores found empty on this volume (a 0-byte ocmshares.json / ocminvites.json
+    #    makes the ocm service fail with "unexpected end of JSON input" and restart
+    #    forever). Written only when missing or empty.
+    mkdir -p /var/lib/opencloud/storage/ocm
+    for f in ocm/allspaces.json ocm/ocminvites.json ocm/ocmshares.json; do
+      if [ ! -s "/var/lib/opencloud/storage/$f" ]; then
+        printf '{}\n' > "/var/lib/opencloud/storage/$f"
+        echo "initialized storage/$f"
+      fi
+    done
     echo "config ready"
