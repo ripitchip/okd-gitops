@@ -13,9 +13,20 @@ spec:
   tls:
     - hosts:
         - auth.tomlab.fr
+        - auth.foobarbaz.fr
       secretName: keycloak-tls-cert
   rules:
     - host: "auth.tomlab.fr"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+    - host: "auth.foobarbaz.fr"
       http:
         paths:
           - path: /
