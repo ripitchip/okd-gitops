@@ -3,6 +3,30 @@ kind: ConfigMap
 metadata:
   name: argocd-cm
 data:
+  url: https://argocd.tomlab.fr
+  # still points at the old Keycloak (foobarbaz) until that realm is migrated
+  # to the new auth.tomlab.fr instance
+  oidc.config: |
+    name: Keycloak
+    issuer: https://auth.foobarbaz.fr/realms/foobarbaz
+    clientID: argocd
+    requestedScopes:
+      - openid
+      - profile
+      - email
+      - groups
+  # ExternalSecret fields the controller/webhook fill in after apply — without
+  # this, Argo CD flags every ExternalSecret as permanently OutOfSync
+  resource.customizations.ignoreDifferences.external-secrets.io_ExternalSecret: |
+    jqPathExpressions:
+      - .spec.data[]?.remoteRef.conversionStrategy
+      - .spec.data[]?.remoteRef.decodingStrategy
+      - .spec.data[]?.remoteRef.metadataPolicy
+      - .spec.data[]?.remoteRef.nullBytePolicy
+      - .spec.target.creationPolicy
+      - .spec.target.deletionPolicy
+      - .spec.target.template.engineVersion
+      - .spec.target.template.mergePolicy
   # needed for sync waves between Applications to work
   resource.customizations.health.argoproj.io_Application: |
     hs = {}
