@@ -54,8 +54,11 @@ data:
     # router then logged "policy is not configured" and every request got a 500.
     yq eval -i '.proxy.policies = [load("/opt/opencloud-proxy/policy.yaml")]' /tmp/opencloud.yaml
 
-    # 2. calendar routes (calshare gate + sidecar), first
-    yq eval -i '.proxy.policies[0].routes = load("/opt/opencloud-calendar-proxy/caldav_routes.yaml").routes + .proxy.policies[0].routes' /tmp/opencloud.yaml
+    # 2. calendar routes (calshare gate + sidecar) AFTER the built-in ones. The root
+    #    fallback of the router only looks at the FIRST prefix route: it must stay "/",
+    #    a calendar route in front of it leaves every page with "no rewrite hook found"
+    #    (500). Prefixes are disjoint (/caldav/ is not /dav/).
+    yq eval -i '.proxy.policies[0].routes = .proxy.policies[0].routes + load("/opt/opencloud-calendar-proxy/caldav_routes.yaml").routes' /tmp/opencloud.yaml
 
     # 3. role assignment from the Keycloak groups claim
     yq eval -i '.proxy.role_assignment = load("/opt/opencloud-role-mapping/role_assignment.yaml").role_assignment' /tmp/opencloud.yaml
