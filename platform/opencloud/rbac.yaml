@@ -1,0 +1,30 @@
+# Token ESO -> Vault: External Secrets Operator n'a pas d'identité Vault propre sur ce
+# cluster, il emprunte celle de ce ServiceAccount (ClusterSecretStore vault-backend, role
+# Vault "external-secrets", pas "opencloud-role" : le ClusterSecretStore est partagé avec
+# cert-manager/auth, cf. platform/cert-manager-webhook-ovh/ovh-dns-secret).
+#
+# system:auth-delegator: l'operator doit créer un token pour ce SA (TokenRequest) puis le
+# faire valider par l'API Kubernetes côté Vault (TokenReview) : c'est ce que la méthode
+# d'auth "kubernetes" de Vault utilise.
+#
+# Sans ce SA, chaque ExternalSecret échoue avec
+# "could not get secret data from provider" et un 403 Vault.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-auth
+  namespace: opencloud
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencloud-vault-auth
+  namespace: opencloud
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault-auth
+    namespace: opencloud

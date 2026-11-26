@@ -46,45 +46,13 @@ spec:
           type: RuntimeDefault
       initContainers:
         # Template opencloud.yaml.tmpl / config.json.tmpl with the Vault secrets, merge the
-        # proxy routes over the built-in proxy defaults, write both to the data volume.
+        # proxy routes, write both to the data volume (script: config-script.yaml).
         # The rendered opencloud.yaml (secrets included) is rewritten on every start: the
         # ConfigMap is the source of truth, it must be changed to change the config.
         - name: opencloud-config
           image: docker.io/mikefarah/yq:4.44.3
-          command: ["bash", "-c"]
-          args:
-            - |
-              set -euo pipefail
-              out=/var/lib/opencloud/config
-              mkdir -p "$out"
-              # __NAME__ -> value of the variable of the same name (envsubst: base image)
-              render() {
-                sed -E 's/__([A-Z0-9_]+)__/$\{\1}/g' "$1" | envsubst
-              }
-              # 1. opencloud.yaml: defaults of this image + proxy section
-              #    (proxy.policies[0] is the "default" policy: its routes are the built-in
-              #    ones, init's empty `proxy: {}` would leave a single "/" -> web route)
-              yq eval '.' /etc/opencloud-config/opencloud.yaml.tmpl > /tmp/opencloud.yaml
-              # (a bare sequence on the command line is kept nested: pass it as a map)
-              yq eval '.proxy.policies = [(load("/opt/opencloud-proxy/policy.yaml") | {"policy": .}).policy] | .proxy.policies |= [.[0][0]]' -i /tmp/opencloud.yaml
-              # 2. calendar routes (calshare gate + sidecar) first: routes match in order
-              #    (load(), never a second file: yq appends a second document here)
-              yq eval -i '.proxy.policies[0].routes = load("/opt/opencloud-calendar-proxy/caldav_routes.yaml").routes + .proxy.policies[0].routes' \
-                /tmp/opencloud.yaml
-              # 3. role assignment from the Keycloak groups claim
-              yq eval -i '.proxy.role_assignment = load("/opt/opencloud-role-mapping/role_assignment.yaml").role_assignment' \
-                /tmp/opencloud.yaml
-              # 4. secrets of the file itself (the services read opencloud.yaml, not the
-              #    env: jwt_secret, machine auth key, IDM passwords...)
-              render /tmp/opencloud.yaml > /tmp/rendered.yaml
-              chmod 600 /tmp/rendered.yaml
-              if ! cmp -s /tmp/rendered.yaml "$out/opencloud.yaml"; then
-                cat /tmp/rendered.yaml > "$out/opencloud.yaml"
-                echo "opencloud.yaml updated"
-              fi
-              # 5. web UI config
-              render /etc/opencloud-web-config/config.json.tmpl > "$out/config.json"
-              echo "config ready"
+          # yq image = Alpine + busybox: sh/ash, sed, envsubst. No bash.
+          command: ["/bin/sh", "/opt/opencloud-config-script/render-config.sh"]
           env:
             - name: JWT_SECRET
               valueFrom:
@@ -152,6 +120,9 @@ spec:
               readOnly: true
             - name: web-config
               mountPath: /etc/opencloud-web-config
+              readOnly: true
+            - name: config-script
+              mountPath: /opt/opencloud-config-script
               readOnly: true
         # Web extensions dropped into the apps directory, sha256-verified (see the comments
         # in each step). Idempotent: the leftovers are removed and the archive re-extracted
@@ -324,6 +295,9 @@ spec:
         - name: web-config
           configMap:
             name: opencloud-web-config
+        - name: config-script
+          configMap:
+            name: opencloud-config-script
         - name: csp
           configMap:
             name: opencloud-csp

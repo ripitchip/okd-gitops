@@ -62,4 +62,7 @@ oc get node <node> -o jsonpath='{.status.capacity}' | jq
   `skopeo inspect --format '{{.Digest}}' docker://nvcr.io/nvidia/driver:<version>-rocky10` et le mettre dans
   `platform/gpu-operator/operator/values-sno.yaml`.
 - **Upgrade Argo CD** : changer le tag dans `platform/argocd/base/kustomization.yaml` (URL `install.yaml`).
+- **Upgrade OpenCloud** : changer le tag dans `platform/opencloud/app.yaml` (Deployment + extensions),
+  puis re-vérifier `proxy-routes.yaml` contre les routes par défaut de la nouvelle version
+  (cf. ADR 0005 : une politique proxy versionnée ne reçoit pas les nouvelles routes).
 - Toujours lancer `scripts/validate.sh` avant de pousser.

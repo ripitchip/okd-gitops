@@ -1,0 +1,59 @@
+# Init script of the "opencloud-config" initContainer (app.yaml).
+#
+# The opencloud image only ships the opencloud binary: rendering (template + secrets) and
+# the proxy route merge run in mikefarah/yq, an Alpine image with busybox: `sh` (ash),
+# `sed`, `envsubst` comes from busybox too. bash is NOT in that image.
+#
+# Exposed as a ConfigMap so that the shell stays out of the YAML: edit here, the
+# Deployment only mounts it (and gets restarted by Argo CD when this file changes).
+#
+# Steps:
+#   1. opencloud.yaml = versioned template (defaults of the image + every service key)
+#      + the proxy section (a versioned policy: init's empty `proxy: {}` would leave a
+#      single "/" -> web route, no /graph, /dav, /ocs...).
+#   2. calendar routes first: routes match in order, /caldav/ must win over /dav/.
+#   3. role assignment from the Keycloak groups claim.
+#   4. __NAME__ placeholders -> secrets from the Secret opencloud-secrets (Vault).
+#   5. web UI config.json.
+#
+# yq reads other files with load(): passing a second file makes yq emit two documents,
+# and the runtime only reads the first one.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opencloud-config-script
+  namespace: opencloud
+data:
+  render-config.sh: |
+    set -eu
+    out=/var/lib/opencloud/config
+    mkdir -p "$out"
+
+    # __NAME__ -> value of the variable of the same name (busybox envsubst)
+    render() {
+      sed -E 's/__([A-Z0-9_]+)__/$\{\1}/g' "$1" | envsubst
+    }
+
+    # 1. opencloud.yaml: template + proxy policy
+    yq eval '.' /etc/opencloud-config/opencloud.yaml.tmpl > /tmp/opencloud.yaml
+    # (a bare sequence on the command line is kept nested: pass it as a map)
+    yq eval -i '.proxy.policies = [(load("/opt/opencloud-proxy/policy.yaml") | {"policy": .}).policy] | .proxy.policies |= [.[0][0]]' /tmp/opencloud.yaml
+
+    # 2. calendar routes (calshare gate + sidecar), first
+    yq eval -i '.proxy.policies[0].routes = load("/opt/opencloud-calendar-proxy/caldav_routes.yaml").routes + .proxy.policies[0].routes' /tmp/opencloud.yaml
+
+    # 3. role assignment from the Keycloak groups claim
+    yq eval -i '.proxy.role_assignment = load("/opt/opencloud-role-mapping/role_assignment.yaml").role_assignment' /tmp/opencloud.yaml
+
+    # 4. secrets of the file itself (the services read opencloud.yaml, not the env:
+    #    jwt_secret, machine auth key, IDM passwords...), then write it
+    render /tmp/opencloud.yaml > /tmp/rendered.yaml
+    chmod 600 /tmp/rendered.yaml
+    if ! cmp -s /tmp/rendered.yaml "$out/opencloud.yaml"; then
+      cat /tmp/rendered.yaml > "$out/opencloud.yaml"
+      echo "opencloud.yaml updated"
+    fi
+
+    # 5. web UI config
+    render /etc/opencloud-web-config/config.json.tmpl > "$out/config.json"
+    echo "config ready"

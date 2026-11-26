@@ -4,8 +4,10 @@ resources:
   - namespace.yaml
   - pv-pvc.yaml
   - scc.yaml
+  - rbac.yaml
   - externalsecret.yaml
   - opencloud-config.yaml
+  - config-script.yaml
   - proxy-routes.yaml
   - role-mapping.yaml
   - web-config.yaml
