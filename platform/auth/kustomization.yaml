@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - pvc.yaml
+  - scc-rbac.yaml
   - externalsecrets.yaml
   - postgres.yaml
   - openldap.yaml

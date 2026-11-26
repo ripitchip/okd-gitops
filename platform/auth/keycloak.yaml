@@ -52,6 +52,7 @@ spec:
           volumeMounts:
             - name: keycloak-providers-volume
               mountPath: /opt/keycloak/providers
+              subPath: providers-data
         - name: prepare-lib
           image: quay.io/keycloak/keycloak:26.6.1
           securityContext:
@@ -140,6 +141,7 @@ spec:
           volumeMounts:
             - name: keycloak-providers-volume
               mountPath: /opt/keycloak/providers
+              subPath: providers-data
             - name: keycloak-lib
               mountPath: /opt/keycloak/lib/quarkus
             - name: keycloak-data

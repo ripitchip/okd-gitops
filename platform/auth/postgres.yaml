@@ -2,25 +2,13 @@
 # it runs as (not just writable) — arbitrary-UID doesn't work here, unlike
 # vault/vaultwarden. Same anyuid + chown-as-root pattern as gpu-operator's
 # kernel-repo (platform/gpu-operator/prereqs/base/scc-rbac.yaml).
+# subPath: postgres-data matches the original cluster's layout exactly — the
+# real data lives in that subdirectory of the NFS export, not at its root.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: postgres
   namespace: auth
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: system:openshift:scc:anyuid
-  namespace: auth
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: system:openshift:scc:anyuid
-subjects:
-  - kind: ServiceAccount
-    name: postgres
-    namespace: auth
 ---
 apiVersion: v1
 kind: Service
@@ -75,6 +63,7 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+              subPath: postgres-data
       containers:
         - name: postgres
           image: mirror.gcr.io/postgres:17
@@ -94,8 +83,6 @@ spec:
               value: "keycloak"
             - name: POSTGRES_DB
               value: "keycloak"
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -107,6 +94,7 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+              subPath: postgres-data
       volumes:
         - name: postgres-data
           persistentVolumeClaim:
