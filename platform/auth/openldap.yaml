@@ -1,0 +1,83 @@
+# no fixed UID/chown-as-root init container (unlike the source cluster):
+# restricted-v2 forbids runAsUser=0 entirely, so SCC assigns its own UID
+apiVersion: v1
+kind: Service
+metadata:
+  name: openldap
+  namespace: auth
+spec:
+  selector:
+    app: openldap
+  ports:
+    - name: ldap
+      port: 389
+      targetPort: 8389
+    - name: ldaps
+      port: 636
+      targetPort: 8636
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openldap
+  namespace: auth
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openldap
+  template:
+    metadata:
+      labels:
+        app: openldap
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: openldap
+          image: jtgasper3/bitnami-openldap:2.6.13
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          env:
+            - name: LDAP_ROOT
+              value: "dc=home,dc=local"
+            - name: LDAP_ADMIN_USERNAME
+              value: "admin"
+            - name: LDAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ldap-passwords
+                  key: admin-password
+            - name: ORG_GROUPS_ENABLED
+              value: "true"
+            - name: LDAP_PORT_NUMBER
+              value: "8389"
+            - name: LDAP_LDAPS_PORT_NUMBER
+              value: "8636"
+            - name: LDAP_LISTEN_ADDRESSES
+              value: "ldap://:8389/"
+          volumeMounts:
+            - name: ldap-data
+              mountPath: /bitnami/openldap
+            - name: openldap-run
+              mountPath: /opt/bitnami/openldap/var/run
+      volumes:
+        - name: ldap-data
+          persistentVolumeClaim:
+            claimName: openldap-data
+        - name: openldap-run
+          emptyDir: {}

@@ -1,0 +1,111 @@
+# reuses the pre-existing NFS exports from the previous cluster build
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: openldap-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/openldap"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openldap-data
+  namespace: auth
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: openldap-pv-static
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: keycloak-db-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/keycloak-db"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-db-data
+  namespace: auth
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: keycloak-db-pv-static
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: keycloak-providers-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/keycloak-providers"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-providers-data
+  namespace: auth
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: keycloak-providers-pv-static
