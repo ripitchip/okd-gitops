@@ -64,18 +64,24 @@ data:
       echo "exist on this instance (restored data). Create the key in Immich" >&2
       echo "(Account > API Keys) and put it in secret/immich-backup, then restart the pod" >&2
     else
-      id=$(printf '%s' "$keys" | jq -r '.[] | select(.name == "immich-backup") | .id' | head -1)
+      id=$(printf '%s' "$keys" | json_get 'data.find((k) => k.name === "immich-backup")?.id')
       if [ -n "$id" ]; then
-        printf '%s' "$keys" | jq -r --arg id "$id" '.[] | select(.id != $id) | .id' \
+        printf '%s' "$keys" | node -e '
+          let d = "";
+          process.stdin.on("data", (c) => { d += c; });
+          process.stdin.on("end", () => {
+            for (const k of JSON.parse(d)) if (k.id !== process.argv[1]) console.log(k.id);
+          });
+        ' "$id" \
           | while read -r stale; do
               curl -fsS -o /dev/null -X DELETE -H "$header" "$api/api-keys/$stale"
               echo "revoked API key $stale"
             done
-        secret=$(curl -fsS -X POST -H "$header" "$api/api-keys/$id/rotate" | jq -r .secret)
+        secret=$(curl -fsS -X POST -H "$header" "$api/api-keys/$id/rotate" | json_get 'data.secret')
         echo "immich-backup: key rotated"
       else
         secret=$(curl -fsS -X POST -H "$header" -H 'Content-Type: application/json' \
-          -d '{"name":"immich-backup","permissions":["all"]}' "$api/api-keys" | jq -r .secret)
+          -d '{"name":"immich-backup","permissions":["all"]}' "$api/api-keys" | json_get 'data.secret')
         echo "immich-backup: key created"
       fi
       umask 077

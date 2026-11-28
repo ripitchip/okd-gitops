@@ -1,5 +1,6 @@
 # libcommon.sh, sourced by init.sh, api-key.sh and migrate.sh (ADR 0007). The
-# immich images ship bash, node, curl, jq and every pg_dump/psql major version.
+# immich images ship bash, node, curl and every pg_dump/psql major version --
+# NOT jq (confirmed live: "jq: command not found"), hence json_get() below.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -39,6 +40,22 @@ data:
       fi
       printf 'postgresql://%s:%s@%s:%s/%s' \
         "$(urlencode "$DB_USERNAME")" "$(urlencode "$DB_PASSWORD")" "$DB_HOSTNAME" "${DB_PORT:-5432}" "$DB_DATABASE_NAME"
+    }
+
+    # No jq in this image: node is there instead (it's how the app itself runs).
+    # Reads JSON from stdin, evaluates `expr` with it bound to `data`, writes the
+    # result ("" for undefined/null, so `-n "$(...)"` checks behave the same way
+    # a missing jq field would).
+    json_get() {
+      node -e '
+        let d = "";
+        process.stdin.on("data", (c) => { d += c; });
+        process.stdin.on("end", () => {
+          const data = JSON.parse(d);
+          const result = eval(process.argv[1]);
+          process.stdout.write(result === undefined || result === null ? "" : String(result));
+        });
+      ' "$1"
     }
 
     # The immich images already ship every pg_dump/psql major version
