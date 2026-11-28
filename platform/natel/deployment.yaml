@@ -1,0 +1,84 @@
+# Natel : éditeur web de contacts CardDAV, utilisé pour éditer les contacts
+# stockés dans le Radicale intégré à OpenCloud (celui-ci n'a pas d'éditeur de
+# contacts natif). Se connecte à l'URL interne d'OpenCloud, qui fait la
+# découverte CardDAV (.well-known/carddav) et route vers Radicale en interne
+# (platform/opencloud/radicale.yaml).
+#
+# Pas de volume, pas de secret, pas de fichier à posséder : contrairement à
+# immich/navidrome (ADR 0007, 0008), aucune raison de fixer un UID ni d'avoir
+# une SCC dédiée ici. runAsUser n'est volontairement pas précisé : restricted-v2
+# (la SCC par défaut) assigne un UID de la plage allouée au namespace, et cette
+# image (générique, stateless, pas de fichiers à elle à posséder) n'a besoin de
+# rien de plus précis.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: natel
+  namespace: natel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: natel
+  template:
+    metadata:
+      labels:
+        app: natel
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: natel
+          image: ghcr.io/kewindousse/natel:0.5.1
+          env:
+            - name: CARDDAV_URL
+              value: "http://opencloud.opencloud.svc.cluster.local:9200"
+            - name: NATEL_TRUSTED_PROXIES
+              value: "private_ranges"
+            - name: NATEL_HTTPS_ONLY_COOKIE
+              value: "true"
+            - name: NATEL_UPDATE_CHECKS
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: natel
+  namespace: natel
+spec:
+  selector:
+    app: natel
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

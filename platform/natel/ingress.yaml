@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: natel
+  namespace: natel
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: openshift-default
+  rules:
+    - host: contacts.tomlab.fr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: natel
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - contacts.tomlab.fr
+      secretName: natel-tls-cert

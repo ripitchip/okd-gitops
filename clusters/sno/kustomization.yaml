@@ -13,3 +13,4 @@ resources:
   - apps/opencloud.yaml
   - apps/immich.yaml
   - apps/navidrome.yaml
+  - apps/natel.yaml
