@@ -36,7 +36,7 @@ supprimé ni renommé**, les secrets sont ceux du manifeste d'origine.
 | --- | --- |
 | -20 | SCC `immich-anyuid-chown`, PV/PVC |
 | -15 | Role/RoleBinding donnant l'usage de la SCC aux SA |
-| -5 | ConfigMaps (config, OIDC, scripts, défauts) |
+| -5 | ConfigMaps (config, OIDC, scripts) |
 | 0 | ExternalSecrets (sauf `immich-backup-sync`, onde 11 : voir plus bas) |
 | 7 | ServiceAccounts, Services |
 | 8 | `immich-postgres`, `immich-redis`, `immich-machine-learning` |
@@ -70,6 +70,20 @@ UID fixe hors de la plage allouée au namespace.
 * `DB_STORAGE_TYPE=HDD`, `IGNORE_DATABASE_FSTYPE=true` (l'entrypoint ne connaît que ext2/3/4, xfs,
   btrfs, zfs, f2fs, tmpfs), `/dev/shm` en `emptyDir`, `PGDATA=data/pgdata`.
 * `immich-db-pvc` (export de l'ancien cluster) n'est monté que pour la reprise manuelle.
+
+## Configuration système (OAuth, template de stockage)
+
+`api-key.sh` (hook `postStart` de `immich-server`) applique l'OAuth et le template de
+stockage une fois, via `GET`/`PUT /api/system-config` (l'API réelle de l'admin), pas en
+SQL direct : version précédente de ce document, l'écriture se faisait contre
+`system_metadata`, clé `systemConfig` (camelCase), valeur à clés aplaties par points
+(`oauth.enabled`, `oauth.clientId`, …) — confirmé en direct contre une v3.4.2 réelle, la
+vraie clé est `system-config` (tiret, `enum SystemMetadataKey.SystemConfig`) et la valeur
+est un objet imbriqué (`{oauth: {enabled, issuerUrl, …}, storageTemplate: {…}, …}`) :
+tout ce qui a été "appliqué" l'a été sous une clé que le serveur ne lit jamais, pendant
+toute la mise en place initiale de ce cluster. `oauth.issuerUrl` vide déclenche
+l'application (une fois ; jamais réécrasé ensuite, y compris sur une base restaurée dont
+l'OAuth pointerait ailleurs).
 
 ## Migration en place (depuis l'ancien cluster)
 
@@ -106,7 +120,8 @@ UID fixe hors de la plage allouée au namespace.
    DNS `photo.tomlab.fr`.
 3. Keycloak : client confidentiel `immich`, redirect URIs `https://photo.tomlab.fr/auth/login`,
    `https://photo.tomlab.fr/user-settings`, `app.immich:///oauth-callback`.
-4. Sync. `immich-migrate` passe, `immich-server` démarre, `api-key.sh` crée le compte admin et la clé.
+4. Sync. `immich-migrate` passe, `immich-server` démarre, `api-key.sh` crée le compte admin,
+   applique OAuth + template de stockage, puis la clé.
 5. Copier `/run/immich-state/key.txt` (`oc exec -c server -- cat`, `api-key.sh` est un hook
    `postStart` du conteneur `server`, pas un init container ; pas `/run/secrets` — CRI-O y
    injecte du contenu `root:root` qui bloque l'écriture, confirmé en direct) dans
@@ -132,3 +147,7 @@ CronJob `immich-db-backup` (03:00) → `POST /api/jobs {"name":"databaseBackup"}
   contient pas : copier la clé dans Vault après la première installation.
 * Une base récupérée garde ses comptes : `admin-email` ne crée rien dessus, la clé se fait depuis le
   web (Compte > Clés API) et se dépose dans Vault.
+* Le quota de stockage par défaut (`oauth.defaultStorageQuota`) n'est **pas** appliqué par
+  `api-key.sh` : l'ancienne convention (`-1` = illimité, en Gio) ne correspond pas au schéma réel de
+  cette version (`.min(0).nullable()` — `null` = illimité, unité non confirmée). À régler à la main
+  dans l'UI (Administration > Paramètres) tant que ce n'est pas vérifié contre le code.

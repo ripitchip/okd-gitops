@@ -12,7 +12,14 @@
 #  2. the local admin account: the first signup of a pristine Immich is the admin,
 #     created here with the admin email/password of the immich-secrets Secret.
 #     ONLY on a pristine database: resetting an Immich account has no CLI here, a
-#     database restored from the previous cluster keeps its own accounts.
+#     database restored from the previous cluster keeps its own accounts;
+#  3. OAuth + storage template, through GET/PUT /api/system-config, once (gated on
+#     oauth.issuerUrl being empty) -- NOT the raw-SQL approach this used to be
+#     (init.sh, apply-config.sql against system_metadata key 'systemConfig', flat
+#     dotted fields). Confirmed against a real v3.4.2 instance: the actual key is
+#     'system-config' and the value is a nested object ({oauth: {...}, ...}); months
+#     of "applied" config sat under a key the server never reads. The real API is
+#     also what survives the next version's internal schema changing again.
 #
 # The key lands in /run/immich-state/key.txt, the "state" emptyDir of the pod
 # (survives a container restart, not a pod recreation; NOT /run/secrets -- confirmed
@@ -57,6 +64,43 @@ data:
         -H 'Content-Type: application/json' \
         -d "{\"email\":\"$email\",\"password\":\"$password\"}" >/dev/null
       header="x-immich-user-token: $(awk '$6 == "immich_access_token" { print $7 }' /tmp/cookies | tail -1)"
+    fi
+
+    current=$(curl -fsS -H "$header" "$api/system-config" 2>/dev/null || true)
+    if [ -n "$current" ] && [ -z "$(printf '%s' "$current" | json_get 'data.oauth.issuerUrl')" ]; then
+      updated=$(printf '%s' "$current" | node -e '
+        let d = "";
+        process.stdin.on("data", (c) => { d += c; });
+        process.stdin.on("end", () => {
+          const config = JSON.parse(d);
+          Object.assign(config.oauth, {
+            enabled: true,
+            autoLaunch: true,
+            autoRegister: true,
+            buttonText: "Se connecter avec Keycloak",
+            clientId: process.env.OIDC_CLIENT_ID,
+            clientSecret: process.env.OIDC_CLIENT_SECRET,
+            issuerUrl: process.env.OIDC_ISSUER,
+            accountManagementUrl: process.env.OIDC_ACCOUNT_URL,
+            scope: "openid email profile",
+            signingAlgorithm: "RS256",
+            profileSigningAlgorithm: "none",
+            storageLabelClaim: "preferred_username",
+            roleClaim: "immich_role",
+            tokenEndpointAuthMethod: "client_secret_post",
+            timeout: 30000,
+            prompt: "",
+          });
+          Object.assign(config.storageTemplate, {
+            enabled: true,
+            hashVerificationEnabled: true,
+            template: "{{y}}/{{y}}-{{MM}}-{{dd}}/{{filename}}",
+          });
+          process.stdout.write(JSON.stringify(config));
+        });
+      ')
+      curl -fsS -X PUT -H "$header" -H 'Content-Type: application/json' -d "$updated" "$api/system-config" >/dev/null
+      echo "system-config: oauth + storage template applied"
     fi
 
     keys=$(curl -fsS -H "$header" "$api/api-keys" 2>/dev/null || true)

@@ -1,7 +1,8 @@
 # immich-server Deployment + Service (ADR 0007), sync-wave 10: after the migration
 # Job. Starts the API only (server + API); the Jobs are the microservices.
-# The secret of the immich-oidc Secret is read by the server itself: OIDC settings
-# live in the database (init.sh), only their client secret comes from here.
+# OIDC settings live in the database (system-config, applied once by api-key.sh's
+# postStart hook through the real API -- see scripts-apikey.yaml); the env vars
+# below just hand it the values to apply, immich-server itself never reads them.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -71,7 +72,8 @@ spec:
           volumeMounts:
             - name: library
               mountPath: /data
-        # Media folders and settings of a fresh instance (init.sh, apply-config.sql)
+        # Media folders of a fresh instance (init.sh): no DB access any more, see
+        # scripts-init.yaml.
         - name: init
           image: ghcr.io/immich-app/immich-server:v3.4.2
           command: ["/bin/bash", "/opt/immich-scripts/init.sh"]
@@ -81,24 +83,9 @@ spec:
               drop: ["ALL"]
             runAsNonRoot: true
             runAsUser: 1000
-          envFrom:
-            - configMapRef:
-                name: immich-config
           env:
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: immich-secrets
-                  key: db-password
-            - name: OIDC_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: immich-oidc
-                  key: client-secret
             - name: IMMICH_MEDIA_LOCATION
               value: "/data"
-            - name: IMMICH_VERSION
-              value: "v3.4.2"
           resources:
             requests:
               cpu: 50m
@@ -111,9 +98,6 @@ spec:
               mountPath: /data
             - name: scripts
               mountPath: /opt/immich-scripts
-              readOnly: true
-            - name: config
-              mountPath: /etc/immich-config
               readOnly: true
             - name: tmp
               mountPath: /tmp
@@ -136,6 +120,21 @@ spec:
                 secretKeyRef:
                   name: immich-oidc
                   key: client-secret
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: immich-oidc
+                  key: client-id
+            - name: OIDC_ISSUER
+              valueFrom:
+                configMapKeyRef:
+                  name: immich-oidc
+                  key: issuer
+            - name: OIDC_ACCOUNT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: immich-oidc
+                  key: account-url
           ports:
             - name: http
               containerPort: 2283
@@ -223,14 +222,6 @@ spec:
                   name: immich-scripts-lib
               - configMap:
                   name: immich-scripts-apikey
-        # defaults/{storage-template,quota}.yaml and oidc/{client-id,issuer,account-url}
-        - name: config
-          projected:
-            sources:
-              - configMap:
-                  name: immich-defaults
-              - configMap:
-                  name: immich-oidc
         - name: init-secret
           secret:
             secretName: immich-secrets
