@@ -37,10 +37,15 @@ instance pour forcer la récupération des paroles manquantes) :
 | --- | --- | --- |
 | `navidrome-lyrics-fetcher-creds` | `subsonic-user`, `subsonic-pass` | Vault `secret/navidrome-secrets` |
 
-Pas de bootstrap admin automatisé (contrairement à Immich) : **le premier compte créé via
-l'UI web devient administrateur**. `subsonic-user`/`subsonic-pass` ne sont donc pas
-inventés à l'avance : ce sont les identifiants d'un compte Navidrome réel, créés *après*
-que l'app tourne, et déposés dans Vault ensuite.
+Pas de migration séparée à faire ici, contrairement à la base Postgres d'Immich (ADR
+0007) : `navidrome-data` est le **même export NFS** repris tel quel, `navidrome.db`
+(SQLite, confirmé présent — 68 Mo, avec `lyrics-fetcher-state.json` et `plugins/` à côté)
+y est déjà. `secret/navidrome-secrets` existe aussi depuis l'ancien cluster, avec
+`subsonic_user`/`subsonic_pass` déjà valides contre ce fichier (et des clés d'autres apps
+de l'ancien bundle — `client_secret`, `cookie_secret`, `gemini_api_key`,
+`subwave_admin_*` — hors périmètre ici, sans danger de les laisser dans le secret K8s
+résultant, pareil qu'`immich-secrets` avec `redis-password`, ADR 0007). Pas de création de
+compte à prévoir : les comptes de l'ancien cluster sont déjà dans la base.
 
 ## Première installation
 
@@ -58,16 +63,7 @@ que l'app tourne, et déposés dans Vault ensuite.
 2. DNS : `music.tomlab.fr`.
 3. Sync. `fix-permissions` chown la bibliothèque (potentiellement long, des centaines de
    dossiers d'artistes sur `navidrome-music` — même ordre de grandeur que la bibliothèque
-   photo d'Immich, patience) ; `navidrome` démarre, le plugin paroles se télécharge au
+   photo d'Immich, patience) ; `navidrome` démarre sur la base existante, tous les comptes
+   et la bibliothèque de l'ancien cluster sont déjà là. Le plugin paroles se télécharge au
    premier démarrage.
-4. `navidrome-lyrics-fetcher-creds-sync` reste en échec jusqu'à l'étape suivante — normal,
-   pas bloquant (`ExternalSecret` seul, pas de wave critique comme `immich-backup-sync`,
-   ADR 0007 : le sidecar attend juste le secret).
-5. Se connecter sur `music.tomlab.fr`, créer le premier compte (devient admin). Créer un
-   compte dédié pour le sidecar (ou réutiliser l'admin), puis :
-   ```sh
-   vault kv put secret/navidrome-secrets \
-     subsonic_user="<compte>" subsonic_pass="<mot de passe>"
-   ```
-6. `navidrome-lyrics-fetcher-creds-sync` passe au vert (retente toutes les heures, ou
-   forcer : `oc -n navidrome annotate externalsecret navidrome-lyrics-fetcher-creds-sync force-sync="$(date +%s)" --overwrite`).
+4. Se connecter sur `music.tomlab.fr` avec un compte existant pour vérifier.
