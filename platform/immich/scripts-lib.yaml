@@ -12,6 +12,22 @@ data:
     # sourced by init.sh, api-key.sh and migrate.sh
     set -eu
 
+    # Percent-encodes the user/password components of the connection URI below:
+    # confirmed live, the original cluster's db-password has characters (':',
+    # '@', ...) that otherwise shift the URI parse, ending up as part of the
+    # "port" (psql: "invalid integer value ... for connection option port").
+    urlencode() {
+      local string="$1" encoded="" c i
+      for (( i=0; i<${#string}; i++ )); do
+        c="${string:i:1}"
+        case "$c" in
+          [a-zA-Z0-9.~_-]) encoded+="$c" ;;
+          *) encoded+=$(printf '%%%02X' "'$c") ;;
+        esac
+      done
+      printf '%s' "$encoded"
+    }
+
     # The password comes from the env of the pod (a secretKeyRef). On OpenShift a
     # Secret is world-readable so that any UID of the range can use it: the same
     # key also signs the API requests of the CronJob (ADR 0007), the media volume
@@ -22,7 +38,7 @@ data:
         exit 1
       fi
       printf 'postgresql://%s:%s@%s:%s/%s' \
-        "$DB_USERNAME" "$DB_PASSWORD" "$DB_HOSTNAME" "${DB_PORT:-5432}" "$DB_DATABASE_NAME"
+        "$(urlencode "$DB_USERNAME")" "$(urlencode "$DB_PASSWORD")" "$DB_HOSTNAME" "${DB_PORT:-5432}" "$DB_DATABASE_NAME"
     }
 
     # The immich images already ship every pg_dump/psql major version
