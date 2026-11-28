@@ -95,7 +95,15 @@ UID fixe hors de la plage allouée au namespace.
 
 1. Vault : `secret/immich-secrets` (`db-password` hex 32, `admin-email`, `admin-password`),
    `secret/immich-oidc` (`client-secret`), `secret/immich-backup` (`api-key` provisoire).
-2. TrueNAS : export `immich-library` ; nœud : `/var/lib/immich-db` ; DNS `photos.tomlab.fr`.
+2. TrueNAS : export `immich-library` ; nœud : `/var/lib/immich-db`, labellisé `container_file_t`
+   (sinon AVC `denied { create }` du `fix-permissions` de `immich-postgres`, confirmé en direct —
+   un `hostPath` neuf hérite de `container_var_lib_t`, que la politique SELinux ne laisse pas un
+   conteneur peupler) :
+   ```sh
+   semanage fcontext -a -t container_file_t "/var/lib/immich-db(/.*)?"
+   restorecon -Rv /var/lib/immich-db
+   ```
+   DNS `photos.tomlab.fr`.
 3. Keycloak : client confidentiel `immich`, redirect URIs `https://photos.tomlab.fr/auth/login`,
    `https://photos.tomlab.fr/user-settings`, `app.immich:///oauth-callback`.
 4. Sync. `immich-migrate` passe, `immich-server` démarre, `api-key.sh` crée le compte admin et la clé.

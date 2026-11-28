@@ -10,7 +10,14 @@
 #    the `|| true` plus parsing the output (a real failure does not say "up
 #    to date") stays, just without the flag;
 #  * the Admin CLI creates its own database on every run, sql-tools checks the
-#    built-in "postgres" one: both are removed once the migration is done.
+#    built-in "postgres" one: both are removed once the migration is done;
+#  * schema-check verifies an ALREADY-migrated database against what the server
+#    expects; it has no "apply" mode (confirmed: immich-admin's command list has
+#    no migrate/apply, only schema-check) and fails outright on a pristine one
+#    ("relation \"kysely_migrations\" does not exist" -- confirmed live, first
+#    install). Same guard as init.sh's system_metadata check: skip cleanly when
+#    there is nothing to check yet, the server's own bootstrap creates it
+#    (DB_SKIP_MIGRATIONS stays false on immich-server, ADR 0007).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -22,6 +29,12 @@ data:
   migrate.sh: |
     . /opt/immich-scripts/libcommon.sh
 
+    url=$(db_url)
+    if [ "$(psql "$url" -Atc "SELECT to_regclass('kysely_migrations') IS NULL")" = "t" ]; then
+      echo "pristine database, no migrations table yet: nothing to check, the server bootstraps it"
+      exit 0
+    fi
+
     log=$(mktemp)
     trap 'rm -f "$log"' EXIT
 
@@ -32,7 +45,6 @@ data:
       exit 1
     fi
 
-    url=$(db_url)
     for db in postgres "$DB_DATABASE_NAME"; do
       psql "${url%/*}/postgres" -v ON_ERROR_STOP=1 -v db="$db" \
         -c 'DROP DATABASE IF EXISTS :"db"' >/dev/null 2>&1 \
