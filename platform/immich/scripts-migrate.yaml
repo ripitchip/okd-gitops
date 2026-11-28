@@ -3,8 +3,12 @@
 # It replaced the automatic migration of the server, which would drop the
 # search_path setting of the database.
 #
-#  * immich_admin_cli --no-exit-code: its exit code is also non-zero on a warning,
-#    the output is parsed instead (a real failure does not say "up to date");
+#  * the binary is `immich-admin` (ghcr.io/immich-app/immich-server:v3.4.2's
+#    /usr/src/app/server/bin/immich-admin), not `immich_admin_cli`; it has no
+#    `--no-exit-code` flag either (confirmed against the live image: "error:
+#    unknown option"). Its exit code can still be non-zero on a warning, so
+#    the `|| true` plus parsing the output (a real failure does not say "up
+#    to date") stays, just without the flag;
 #  * the Admin CLI creates its own database on every run, sql-tools checks the
 #    built-in "postgres" one: both are removed once the migration is done.
 apiVersion: v1
@@ -21,7 +25,7 @@ data:
     log=$(mktemp)
     trap 'rm -f "$log"' EXIT
 
-    immich_admin_cli --no-exit-code schema-check </dev/null >"$log" 2>&1 || true
+    immich-admin schema-check </dev/null >"$log" 2>&1 || true
     cat "$log"
     if ! grep -q 'Migrations are up to date' "$log"; then
       echo "schema-check failed" >&2
