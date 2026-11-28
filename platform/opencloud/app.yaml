@@ -1,15 +1,3 @@
-# OpenCloud 9.1.0, single "opencloud server" runtime process (all services in one pod, like
-# the upstream docker-compose), plus the calendar stack in its own pod (radicale.yaml).
-#
-# No `opencloud init` here: it writes opencloud.yaml (random JWT secret, service account,
-# IDM passwords...) once per volume. With an empty volume (or a new pod) that is a new IDM
-# database with new secrets every time: sessions, sync clients and the local admin break.
-# The config is versioned instead (opencloud-config.yaml), its secrets come from Vault
-# (externalsecret.yaml), and the initContainer "opencloud-config" renders it on every
-# start, so the ConfigMap is the source of truth.
-#
-# Template rendering (opencloud.yaml.tmpl, config.json.tmpl) and merging the proxy routes
-# need yq and bash: done in a yq image, the opencloud image only has the binary.
 apiVersion: v1
 kind: Service
 metadata:
@@ -174,7 +162,7 @@ spec:
               mountPath: /var/lib/opencloud
       containers:
         - name: opencloud
-          image: docker.io/opencloudeu/opencloud-rolling:9.1.0
+          image: docker.io/opencloudeu/opencloud-rolling:9.2.0
           command: ["/usr/bin/opencloud"]
           args: ["server"]
           securityContext:

@@ -1,16 +1,3 @@
-# Render target: one rule, "default" (proxy's built-in policy of the same name), rendered
-# over the defaults so endpoints match their purpose again.
-#
-# `opencloud init` writes an EMPTY `proxy: {}` section into opencloud.yaml, which overrides
-# the built-in routes wholesale. Rendered over the default config, the result is a policy
-# with a single `/` -> web route: no /graph, /dav, /ocs, /app... anywhere, login and sync
-# included. Listing the routes here is what restores them; anything added later (yjs, ...)
-# goes in this file too.
-#
-# initContainers render this file (defaults + routes), so the built-in defaults of the
-# image version (v9.1.0, see services/proxy/pkg/config/defaults/defaultconfig.go) are
-# always the base. Re-check this file when upgrading OpenCloud: new default routes have
-# to be added here by hand.
 apiVersion: v1
 kind: ConfigMap
 metadata:
