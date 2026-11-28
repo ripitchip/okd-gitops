@@ -323,12 +323,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: navidrome-lyrics-fetcher-creds
-                  key: subsonic-user
+                  key: subsonic_user
             - name: SUBSONIC_PASS
               valueFrom:
                 secretKeyRef:
                   name: navidrome-lyrics-fetcher-creds
-                  key: subsonic-pass
+                  key: subsonic_pass
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
