@@ -4,6 +4,13 @@
 # immich-server (wave 10) waits on it in turn, since Argo CD gates each wave
 # on the previous one's health -- it does NOT run everything in parallel and
 # let retries "absorb" the ordering, whatever an earlier note here assumed.
+#
+# No sync-options: Replace=true -- confirmed live, it does not delete-then-
+# recreate on a template change, it issues a raw PUT that always fails against
+# an already-Complete Job ("spec.selector: Required value", "field is
+# immutable"), on every single sync from then on, change or not. A future
+# change to this Job's template needs `oc -n immich delete job immich-migrate`
+# first either way, so Replace=true bought nothing but that recurring noise.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -19,7 +26,6 @@ metadata:
   namespace: immich
   annotations:
     argocd.argoproj.io/sync-wave: "9"
-    argocd.argoproj.io/sync-options: Replace=true
 spec:
   backoffLimit: 2
   activeDeadlineSeconds: 3600
