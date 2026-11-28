@@ -1,0 +1,82 @@
+# Narrow, anyuid-derived SCC, same pattern as immich-anyuid-chown and
+# openldap-anyuid-netbind (platform/auth, platform/immich): anyuid forbids adding
+# capabilities (allowedCapabilities: null), and the "fix-permissions" init
+# container needs CHOWN/FOWNER to re-own the NFS exports from the previous
+# cluster's UID (45249) to this one's (1000). restricted-v2 also rejects a fixed
+# UID outside the namespace's allocated range, which navidrome and its sidecars
+# all pin to (1000).
+#
+# ClusterRole, not a namespaced Role: confirmed against platform/immich, a Role
+# granting "use" on a cluster-scoped SCC worked for Deployment-created pods but
+# not Job-created ones, for reasons that never reduced to RBAC. Navidrome has no
+# Job, but there's no reason to risk the same multi-hour detour here.
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: navidrome-anyuid-chown
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: true
+allowPrivilegedContainer: false
+allowedCapabilities:
+  - CHOWN
+  - FOWNER
+defaultAddCapabilities: null
+fsGroup:
+  type: RunAsAny
+priority: 10
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+  - MKNOD
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: MustRunAs
+seccompProfiles:
+  - runtime/default
+supplementalGroups:
+  type: RunAsAny
+users: []
+volumes:
+  - configMap
+  - csi
+  - downwardAPI
+  - emptyDir
+  - ephemeral
+  - image
+  - persistentVolumeClaim
+  - projected
+  - secret
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: use-navidrome-scc
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+rules:
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["navidrome-anyuid-chown"]
+    verbs: ["use"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: use-navidrome-scc
+  namespace: navidrome
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: use-navidrome-scc
+subjects:
+  - kind: ServiceAccount
+    name: navidrome
+    namespace: navidrome

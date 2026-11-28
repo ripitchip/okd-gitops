@@ -1,0 +1,27 @@
+# Converted to a Route (openshift.io/ingress-to-route, ADR 0007's pattern), dropped
+# the foobarbaz.fr second host (no longer in use, immich's ingress.yaml the same).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: navidrome
+  namespace: navidrome
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    haproxy.router.openshift.io/timeout: 600s
+spec:
+  ingressClassName: openshift-default
+  rules:
+    - host: music.tomlab.fr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: navidrome
+                port:
+                  number: 4533
+  tls:
+    - hosts:
+        - music.tomlab.fr
+      secretName: navidrome-tls-cert

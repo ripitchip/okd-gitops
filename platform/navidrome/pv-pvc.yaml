@@ -1,0 +1,77 @@
+# PV/PVC, exports of the previous cluster reused as-is (ADR 0004: no CSI/provisioner
+# on this cluster, storageClassName only pairs a PVC with its PV). ReadWriteOnce,
+# not the ReadWriteMany of the original: this is a single-node cluster and the
+# whole Deployment (navidrome + its sidecars) lives in one pod anyway.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: navidrome-data-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/navidrome-data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navidrome-data-pvc
+  namespace: navidrome
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: navidrome-data-pv-static
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: navidrome-music-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/navidrome-music"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navidrome-music-pvc
+  namespace: navidrome
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Ti
+  volumeName: navidrome-music-pv-static
