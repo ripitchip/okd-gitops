@@ -1,4 +1,4 @@
-# immich-server Deployment + Service (ADR 0007), sync-wave 8: after the migration
+# immich-server Deployment + Service (ADR 0007), sync-wave 10: after the migration
 # Job. Starts the API only (server + API); the Jobs are the microservices.
 # The secret of the immich-oidc Secret is read by the server itself: OIDC settings
 # live in the database (init.sh), only their client secret comes from here.
@@ -29,7 +29,7 @@ metadata:
   name: immich-server
   namespace: immich
   annotations:
-    argocd.argoproj.io/sync-wave: "8"
+    argocd.argoproj.io/sync-wave: "10"
 spec:
   replicas: 1
   strategy:

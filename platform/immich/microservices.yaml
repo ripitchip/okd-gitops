@@ -1,6 +1,6 @@
 # Microservices of Immich (ADR 0007): the jobs (thumbnails, metadata, transcoding,
 # schedules), queued by the API and run here. The first start needs the schema and
-# the server: sync-wave 10, after immich-server.
+# the server: sync-wave 11, after immich-server (now wave 10).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -15,7 +15,7 @@ metadata:
   name: immich-microservices
   namespace: immich
   annotations:
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "11"
 spec:
   replicas: 1
   strategy:

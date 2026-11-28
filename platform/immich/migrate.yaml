@@ -1,13 +1,16 @@
-# immich-migrate Job (ADR 0007), sync-wave 5, before immich-server: the schema
-# migrations, then the scratch databases the migration tools create on each run.
-# Replaced by Argo CD after an upgrade (a Job is immutable).
+# immich-migrate Job (ADR 0007), sync-wave 9: schema-check needs postgres AND
+# redis actually reachable (confirmed live: ECONNREFUSED until they are), not
+# just created, so it runs after wave 8 (postgres/redis/machine-learning), and
+# immich-server (wave 10) waits on it in turn, since Argo CD gates each wave
+# on the previous one's health -- it does NOT run everything in parallel and
+# let retries "absorb" the ordering, whatever an earlier note here assumed.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: immich-migrate
   namespace: immich
   annotations:
-    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-wave: "7"
 ---
 apiVersion: batch/v1
 kind: Job
@@ -15,7 +18,7 @@ metadata:
   name: immich-migrate
   namespace: immich
   annotations:
-    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-wave: "9"
     argocd.argoproj.io/sync-options: Replace=true
 spec:
   backoffLimit: 2
