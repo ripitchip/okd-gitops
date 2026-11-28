@@ -107,7 +107,8 @@ UID fixe hors de la plage allouée au namespace.
 3. Keycloak : client confidentiel `immich`, redirect URIs `https://photos.tomlab.fr/auth/login`,
    `https://photos.tomlab.fr/user-settings`, `app.immich:///oauth-callback`.
 4. Sync. `immich-migrate` passe, `immich-server` démarre, `api-key.sh` crée le compte admin et la clé.
-5. Copier `/run/secrets/key.txt` (`oc exec -c api-key -- cat`) dans `secret/immich-backup`, puis
+5. Copier `/run/secrets/key.txt` (`oc exec -c server -- cat`, `api-key.sh` est un hook `postStart`
+   du conteneur `server`, pas un init container) dans `secret/immich-backup`, puis
    `oc -n immich create job --from=cronjob/immich-db-backup dump-manual`.
 6. Se connecter (web : compte local `admin-email`, app mobile : Keycloak) et donner le rôle admin
    aux comptes OIDC dans Administration > Users.

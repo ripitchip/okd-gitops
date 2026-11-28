@@ -1,4 +1,9 @@
-# api-key.sh, init container of immich-server running after the server (ADR 0007).
+# api-key.sh, postStart hook of immich-server's own "server" container (ADR 0007):
+# NOT an init container -- it was, but its curl loop against localhost always found
+# nothing listening (confirmed live: the main container doesn't exist yet during
+# init, ~10 minutes burned every start for nothing, exit 0, no admin account ever
+# created). postStart runs inside the container once it exists; the ping-retry loop
+# below absorbs the remaining race against the app actually listening.
 #
 #  1. an API key: Immich stores keys hashed (sha256), the API never returns a
 #     secret, so the key of the CronJob cannot be written from Vault: created here
@@ -9,8 +14,9 @@
 #     ONLY on a pristine database: resetting an Immich account has no CLI here, a
 #     database restored from the previous cluster keeps its own accounts.
 #
-# The key lands in /run/secrets/key.txt (emptyDir of the pod): copy it to
-# secret/immich-backup, the next runs reuse it (ADR 0007).
+# The key lands in /run/secrets/key.txt, the "state" emptyDir of the pod (survives a
+# container restart, not a pod recreation): copy it to secret/immich-backup, the next
+# runs reuse it (ADR 0007).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -40,12 +46,9 @@ data:
     fi
 
     key=""
-    for candidate in /run/secrets/key.txt /run/state/previous-key.txt; do
-      if [ -s "$candidate" ]; then
-        key=$(cat "$candidate")
-        break
-      fi
-    done
+    if [ -s /run/secrets/key.txt ]; then
+      key=$(cat /run/secrets/key.txt)
+    fi
     if [ -n "$key" ] && curl -fsS -o /dev/null -m 10 -H "x-api-key: $key" "$api/api-keys/me"; then
       header="x-api-key: $key"
     else
@@ -77,7 +80,6 @@ data:
       fi
       umask 077
       printf '%s' "$secret" > /run/secrets/key.txt
-      printf '%s' "$secret" > /run/state/previous-key.txt
       echo "key.txt written: copy it to secret/immich-backup (ADR 0007)"
     fi
 

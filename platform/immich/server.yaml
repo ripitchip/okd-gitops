@@ -117,45 +117,6 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
-        # First account (the admin, OIDC is for the others), then the API key of
-        # the Secret (created, rotated, the others revoked): api-key.sh
-        - name: api-key
-          image: ghcr.io/immich-app/immich-server:v3.4.2
-          command: ["/bin/bash", "/opt/immich-scripts/api-key.sh"]
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-            runAsNonRoot: true
-            runAsUser: 1000
-          envFrom:
-            - configMapRef:
-                name: immich-config
-          env:
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: immich-secrets
-                  key: db-password
-          resources:
-            requests:
-              cpu: 10m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          volumeMounts:
-            - name: scripts-api-key
-              mountPath: /opt/immich-scripts
-              readOnly: true
-            # the admin credentials of the Secret, in their own directory
-            - name: init-secret
-              mountPath: /run/init
-              readOnly: true
-            - name: state
-              mountPath: /run/secrets
-            - name: tmp
-              mountPath: /tmp
       containers:
         - name: server
           image: ghcr.io/immich-app/immich-server:v3.4.2
@@ -178,6 +139,18 @@ spec:
           ports:
             - name: http
               containerPort: 2283
+          # First account (the admin, OIDC is for the others), then the API key of
+          # the Secret (created, rotated, the others revoked): api-key.sh. A postStart
+          # hook, not an init container: as an init container it ran before this very
+          # container existed, so its own curl loop against localhost:2283 could never
+          # reach anything (confirmed live: it just burned ~10 minutes, then gave up
+          # silently, exit 0, no admin account ever created). postStart runs inside
+          # this container once it exists; api-key.sh's own ping-retry loop absorbs
+          # the remaining race against the app actually listening.
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/bash", "/opt/immich-scripts/api-key.sh"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -212,9 +185,16 @@ spec:
           volumeMounts:
             - name: library
               mountPath: /data
+            - name: scripts-api-key
+              mountPath: /opt/immich-scripts
+              readOnly: true
+            # the admin credentials of the Secret, in their own directory
+            - name: init-secret
+              mountPath: /run/init
+              readOnly: true
+            # postStart's api-key.sh writes the rotated key here
             - name: state
               mountPath: /run/secrets
-              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
