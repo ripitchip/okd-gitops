@@ -221,14 +221,23 @@ spec:
         - name: library
           persistentVolumeClaim:
             claimName: immich-library-pvc
+        # init.sh and api-key.sh both source libcommon.sh: combined into the same directory
         - name: scripts
-          configMap:
-            name: immich-scripts-init
+          projected:
             defaultMode: 0755
+            sources:
+              - configMap:
+                  name: immich-scripts-lib
+              - configMap:
+                  name: immich-scripts-init
         - name: scripts-api-key
-          configMap:
-            name: immich-scripts-apikey
+          projected:
             defaultMode: 0755
+            sources:
+              - configMap:
+                  name: immich-scripts-lib
+              - configMap:
+                  name: immich-scripts-apikey
         # defaults/{storage-template,quota}.yaml and oidc/{client-id,issuer,account-url}
         - name: config
           projected:

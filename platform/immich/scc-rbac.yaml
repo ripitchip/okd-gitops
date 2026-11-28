@@ -3,6 +3,17 @@
 # and the "fix-permissions" init containers need CHOWN/FOWNER. Bound to every
 # ServiceAccount of the namespace whose pods pin runAsUser: 1000 (outside the
 # namespace's allocated range, so restricted-v2 alone would reject them).
+#
+# ClusterRole, not a namespaced Role: a Role granting "use" on this SCC let
+# Deployment-created pods (openldap-anyuid-netbind, platform/auth, works the
+# same way) through, but the immich-migrate Job's pods were rejected outright
+# — immich-anyuid-chown never even appeared as a candidate in the SCC
+# admission error, for reasons that didn't reduce to RBAC (`oc auth can-i`
+# said yes the whole time). `oc adm policy add-scc-to-user` — which creates
+# a ClusterRole named `system:openshift:scc:<scc>`, the same shape
+# platform/auth/scc-rbac.yaml uses for the built-in `anyuid` SCC — fixed it
+# immediately. Matching that proven path here rather than chasing the root
+# cause further.
 apiVersion: security.openshift.io/v1
 kind: SecurityContextConstraints
 metadata:
@@ -28,6 +39,8 @@ requiredDropCapabilities:
   - MKNOD
 runAsUser:
   type: RunAsAny
+seccompProfiles:
+  - runtime/default
 seLinuxContext:
   type: MustRunAs
 supplementalGroups:
@@ -45,10 +58,9 @@ volumes:
   - secret
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: use-immich-scc
-  namespace: immich
   annotations:
     argocd.argoproj.io/sync-wave: "-15"
 rules:
@@ -66,7 +78,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-15"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: use-immich-scc
 subjects:
   - kind: ServiceAccount

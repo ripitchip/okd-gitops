@@ -66,9 +66,14 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        # migrate.sh sources libcommon.sh: both land in the same directory
         - name: scripts
-          configMap:
-            name: immich-scripts-migrate
+          projected:
             defaultMode: 0755
+            sources:
+              - configMap:
+                  name: immich-scripts-lib
+              - configMap:
+                  name: immich-scripts-migrate
         - name: tmp
           emptyDir: {}
