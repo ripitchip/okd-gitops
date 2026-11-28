@@ -11,7 +11,7 @@ data:
   backup.sh: |
     set -eu
 
-    api_key=$(cat /run/secrets/key.txt)
+    api_key=$(cat /run/immich-state/key.txt)
     service=$(
       kubectl get pods -n immich -l app=immich-server \
         -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{" "}{.metadata.name}{"\n"}{end}' \

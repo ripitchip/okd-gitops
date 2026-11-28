@@ -14,9 +14,10 @@
 #     ONLY on a pristine database: resetting an Immich account has no CLI here, a
 #     database restored from the previous cluster keeps its own accounts.
 #
-# The key lands in /run/secrets/key.txt, the "state" emptyDir of the pod (survives a
-# container restart, not a pod recreation): copy it to secret/immich-backup, the next
-# runs reuse it (ADR 0007).
+# The key lands in /run/immich-state/key.txt, the "state" emptyDir of the pod
+# (survives a container restart, not a pod recreation; NOT /run/secrets -- confirmed
+# live, CRI-O auto-injects root:root content there that blocks writes under it):
+# copy it to secret/immich-backup, the next runs reuse it (ADR 0007).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -46,8 +47,8 @@ data:
     fi
 
     key=""
-    if [ -s /run/secrets/key.txt ]; then
-      key=$(cat /run/secrets/key.txt)
+    if [ -s /run/immich-state/key.txt ]; then
+      key=$(cat /run/immich-state/key.txt)
     fi
     if [ -n "$key" ] && curl -fsS -o /dev/null -m 10 -H "x-api-key: $key" "$api/api-keys/me"; then
       header="x-api-key: $key"
@@ -85,7 +86,7 @@ data:
         echo "immich-backup: key created"
       fi
       umask 077
-      printf '%s' "$secret" > /run/secrets/key.txt
+      printf '%s' "$secret" > /run/immich-state/key.txt
       echo "key.txt written: copy it to secret/immich-backup (ADR 0007)"
     fi
 

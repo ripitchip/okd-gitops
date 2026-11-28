@@ -98,7 +98,10 @@ spec:
                   mountPath: /opt/immich-scripts
                   readOnly: true
                 - name: api-key
-                  mountPath: /run/secrets
+                  # not /run/secrets: CRI-O auto-injects root:root content there
+                  # (kubernetes.io/, rhsm/) that collides with a plain volume mount,
+                  # confirmed live ("Permission denied" writing under it elsewhere)
+                  mountPath: /run/immich-state
                   readOnly: true
           volumes:
             - name: scripts

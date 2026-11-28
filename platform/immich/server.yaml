@@ -192,9 +192,14 @@ spec:
             - name: init-secret
               mountPath: /run/init
               readOnly: true
-            # postStart's api-key.sh writes the rotated key here
+            # postStart's api-key.sh writes the rotated key here. Not /run/secrets:
+            # CRI-O auto-injects root:root content there (kubernetes.io/, rhsm/) that
+            # collides with a plain volume mount -- confirmed live, "Permission
+            # denied" writing key.txt under it, even though the emptyDir itself is
+            # 0777 (reproduced in isolation: identical write succeeds at any other
+            # path).
             - name: state
-              mountPath: /run/secrets
+              mountPath: /run/immich-state
             - name: tmp
               mountPath: /tmp
       volumes:
