@@ -60,10 +60,16 @@ data:
     if [ -n "$key" ] && curl -fsS -o /dev/null -m 10 -H "x-api-key: $key" "$api/api-keys/me"; then
       header="x-api-key: $key"
     else
+      # fails with 401 on a database restored from the previous cluster: the
+      # admin-email/password of immich-secrets is this cluster's bootstrap
+      # account, not necessarily one that exists there. Confirmed live: without
+      # `|| true` this curl's non-zero exit (-f) killed the whole script under
+      # set -e, crash-looping "server" forever instead of reaching the "no
+      # session" message below.
       curl -fsS -c /tmp/cookies -X POST "$api/auth/login" \
         -H 'Content-Type: application/json' \
-        -d "{\"email\":\"$email\",\"password\":\"$password\"}" >/dev/null
-      header="x-immich-user-token: $(awk '$6 == "immich_access_token" { print $7 }' /tmp/cookies | tail -1)"
+        -d "{\"email\":\"$email\",\"password\":\"$password\"}" >/dev/null 2>&1 || true
+      header="x-immich-user-token: $(awk '$6 == "immich_access_token" { print $7 }' /tmp/cookies 2>/dev/null | tail -1)"
     fi
 
     current=$(curl -fsS -H "$header" "$api/system-config" 2>/dev/null || true)
