@@ -4,8 +4,6 @@ metadata:
   name: argocd-cm
 data:
   url: https://argocd.tomlab.fr
-  # still points at the old Keycloak (foobarbaz) until that realm is migrated
-  # to the new auth.tomlab.fr instance
   oidc.config: |
     name: Keycloak
     issuer: https://auth.tomlab.fr/realms/foobarbaz
