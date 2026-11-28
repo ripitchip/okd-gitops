@@ -12,7 +12,7 @@ metadata:
 spec:
   ingressClassName: openshift-default
   rules:
-    - host: photos.tomlab.fr
+    - host: photo.tomlab.fr
       http:
         paths:
           - path: /
@@ -24,5 +24,5 @@ spec:
                   number: 2283
   tls:
     - hosts:
-        - photos.tomlab.fr
+        - photo.tomlab.fr
       secretName: immich-tls-cert

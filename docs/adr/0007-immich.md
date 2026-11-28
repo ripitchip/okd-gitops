@@ -103,9 +103,9 @@ UID fixe hors de la plage allouée au namespace.
    semanage fcontext -a -t container_file_t "/var/lib/immich-db(/.*)?"
    restorecon -Rv /var/lib/immich-db
    ```
-   DNS `photos.tomlab.fr`.
-3. Keycloak : client confidentiel `immich`, redirect URIs `https://photos.tomlab.fr/auth/login`,
-   `https://photos.tomlab.fr/user-settings`, `app.immich:///oauth-callback`.
+   DNS `photo.tomlab.fr`.
+3. Keycloak : client confidentiel `immich`, redirect URIs `https://photo.tomlab.fr/auth/login`,
+   `https://photo.tomlab.fr/user-settings`, `app.immich:///oauth-callback`.
 4. Sync. `immich-migrate` passe, `immich-server` démarre, `api-key.sh` crée le compte admin et la clé.
 5. Copier `/run/immich-state/key.txt` (`oc exec -c server -- cat`, `api-key.sh` est un hook
    `postStart` du conteneur `server`, pas un init container ; pas `/run/secrets` — CRI-O y
