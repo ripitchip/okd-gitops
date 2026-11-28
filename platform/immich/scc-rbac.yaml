@@ -1,0 +1,89 @@
+# Narrow, anyuid-derived SCC, same pattern as openldap-anyuid-netbind
+# (platform/auth): anyuid forbids adding capabilities (allowedCapabilities: null),
+# and the "fix-permissions" init containers need CHOWN/FOWNER. Bound to every
+# ServiceAccount of the namespace whose pods pin runAsUser: 1000 (outside the
+# namespace's allocated range, so restricted-v2 alone would reject them).
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: immich-anyuid-chown
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: true
+allowPrivilegedContainer: false
+allowedCapabilities:
+  - CHOWN
+  - FOWNER
+defaultAddCapabilities: null
+fsGroup:
+  type: RunAsAny
+priority: 10
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+  - MKNOD
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+users: []
+volumes:
+  - configMap
+  - csi
+  - downwardAPI
+  - emptyDir
+  - ephemeral
+  - image
+  - persistentVolumeClaim
+  - projected
+  - secret
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: use-immich-scc
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+rules:
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["immich-anyuid-chown"]
+    verbs: ["use"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: use-immich-scc
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: use-immich-scc
+subjects:
+  - kind: ServiceAccount
+    name: immich-server
+    namespace: immich
+  - kind: ServiceAccount
+    name: immich-microservices
+    namespace: immich
+  - kind: ServiceAccount
+    name: immich-postgres
+    namespace: immich
+  - kind: ServiceAccount
+    name: immich-migrate
+    namespace: immich
+  - kind: ServiceAccount
+    name: immich-redis
+    namespace: immich
+  - kind: ServiceAccount
+    name: immich-machine-learning
+    namespace: immich

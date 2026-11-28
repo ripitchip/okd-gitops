@@ -1,0 +1,118 @@
+# PV/PVC, with the names of the manifest of the maintainer:
+#  * immich-library-pvc: the export of the previous cluster, /mnt/data/k8s-cluster/
+#    pvc-volumes/immich-library (ADR 0004). Nothing is removed or renamed: the init
+#    container chowns it (ADR 0007) and leaves the rest in place. An export that
+#    does not exist yet is created by that init when the share allows it, otherwise
+#    the pod stops with "no library, an empty volume would look like a fresh
+#    install" and waits (no empty volume quietly served);
+#  * immich-db-pvc: the database export of the previous cluster, kept as is for the
+#    migration (pg_dump/restore, ADR 0007). It is NOT what postgres mounts: its
+#    entrypoint refuses network shares. immich-db-local is the PGDATA, local to the
+#    node, hostPath /var/lib/immich-db of the nœud (the old disk cannot be moved).
+# No StorageClass is provisioned: the names only pair a PVC with its PV.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-library-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/immich-library"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-library-pvc
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  volumeName: immich-library-pv-static
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-db-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-nfs
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - nolock
+  nfs:
+    server: "10.0.40.10"
+    path: "/mnt/data/k8s-cluster/pvc-volumes/immich-db"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-db-pvc
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  storageClassName: truenas-nfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: immich-db-pv-static
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-db-local-pv-static
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: immich-local
+  hostPath:
+    path: "/var/lib/immich-db"
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-db-local
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  storageClassName: immich-local
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: immich-db-local-pv-static

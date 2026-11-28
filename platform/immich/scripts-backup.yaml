@@ -1,0 +1,28 @@
+# backup.sh, job of the immich-db-backup CronJob (ADR 0007): kubectl exec, the
+# ose-tools image has no curl, the one of immich-server has.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-scripts-backup
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+data:
+  backup.sh: |
+    set -eu
+
+    api_key=$(cat /run/secrets/key.txt)
+    service=$(
+      kubectl get pods -n immich -l app=immich-server \
+        -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{" "}{.metadata.name}{"\n"}{end}' \
+      | awk '$1 == "True" { print $2; exit }'
+    )
+    [ -n "$service" ] || { echo "immich-server is not Ready" >&2; exit 1; }
+
+    kubectl exec -n immich "$service" -- \
+      curl -fsS -m 10 http://localhost:2283/api/server/ping >/dev/null
+    kubectl exec -n immich "$service" -- \
+      curl -fsS -m 30 -X POST -H 'Content-Type: application/json' -H "x-api-key: $api_key" \
+      http://localhost:2283/api/jobs -d '{"name":"databaseBackup"}'
+    echo
+    echo "database backup queued"

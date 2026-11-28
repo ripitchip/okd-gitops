@@ -11,3 +11,4 @@ resources:
   - apps/vaultwarden.yaml
   - apps/auth.yaml
   - apps/opencloud.yaml
+  - apps/immich.yaml

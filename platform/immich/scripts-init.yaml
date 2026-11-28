@@ -1,0 +1,83 @@
+# init.sh, init container of immich-server (ADR 0007), before the server. Nothing
+# in the library volume is removed, renamed or emptied:
+#  * the folders Immich expects are created there (Immich creates them itself on a
+#    pristine volume);
+#  * if the volume does not even allow that (no export at this path), the pod is
+#    not served as a new install: the init says so, waits, then restarts;
+#  * no leftover database dump: the server refuses to start with a failed one;
+#  * the .immich marker is Immich's own marker, written by Immich on a pristine
+#    install. "A mount with the .immich files gone" is the mount error Immich
+#    documents: the marker is restored when the other folders still have one;
+#  * the settings applied once (apply-config.sql), after a dump of the database,
+#    and only if it is a fresh instance (no account): never over a database that
+#    immich-db-restore loaded from the previous cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-scripts-init
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+data:
+  init.sh: |
+    . /opt/immich-scripts/libcommon.sh
+
+    media=${IMMICH_MEDIA_LOCATION:-/data}
+    url=$(db_url)
+    mkdirs=1
+    for folder in upload library thumbs encoded-video profile backups; do
+      mkdir -p "$media/$folder" 2>/dev/null || mkdirs=0
+    done
+    if [ "$mkdirs" = "0" ]; then
+      echo "cannot create the folders under $media: no export at this path?" >&2
+      echo "create the immich-library export on TrueNAS (ADR 0007), the pod waits" >&2
+      sleep 300
+      exit 1
+    fi
+    rm -f "$media"/backups/*.tmp
+
+    markers=0
+    for folder in upload library thumbs encoded-video profile backups; do
+      [ -e "$media/$folder/.immich" ] && markers=$((markers + 1))
+    done
+    if [ "$markers" -gt 0 ] && [ "$markers" -lt 6 ]; then
+      for folder in upload library thumbs encoded-video profile backups; do
+        [ -e "$media/$folder/.immich" ] || touch "$media/$folder/.immich"
+      done
+      echo "restored the .immich markers (Immich refuses a missing one)"
+    fi
+
+    if [ "$(psql "$url" -Atc "SELECT to_regclass('system_metadata') IS NULL")" = "t" ]; then
+      echo "schema not migrated yet, nothing to apply"
+      exit 0
+    fi
+    if [ "$(psql "$url" -Atc 'SELECT count(*) FROM "user"' 2>/dev/null)" != "0" ]; then
+      echo "existing accounts (restored data): settings left as they are"
+      exit 0
+    fi
+    pending=$(
+      psql "$url" -Atc "SELECT string_agg(s.key, ',' ORDER BY s.key)
+        FROM (VALUES ('storageTemplateMigration'), ('storageQuotas'), ('oauthSetup')) AS s(key)
+        WHERE NOT EXISTS (SELECT 1 FROM system_metadata m WHERE m.key = s.key)"
+    )
+    if [ -z "$pending" ]; then
+      echo "settings already applied"
+      exit 0
+    fi
+    echo "applying: $pending"
+    dump="$media/backups/pre-immich-settings-$(date +%Y%m%dT%H%M%S)-v${IMMICH_VERSION:-unknown}.sql"
+    if "$(pg_bin pg_dump)" --clean --if-exists --single-transaction --dbname="$url" > "$dump"; then
+      gzip -f "$dump"
+    else
+      echo "database dump failed" >&2
+      rm -f "$dump"
+      exit 1
+    fi
+    psql "$url" -v ON_ERROR_STOP=1 \
+      -v storage_template="$(cat /etc/immich-config/defaults/storage-template.yaml)" \
+      -v quota="$(cat /etc/immich-config/defaults/quota.yaml)" \
+      -v oidc_client_id="$(cat /etc/immich-config/oidc/client-id)" \
+      -v oidc_client_secret="${OIDC_CLIENT_SECRET}" \
+      -v oidc_issuer="$(cat /etc/immich-config/oidc/issuer)" \
+      -v oidc_account_url="$(cat /etc/immich-config/oidc/account-url)" \
+      -f /opt/immich-scripts/apply-config.sql

@@ -1,0 +1,251 @@
+# immich-server Deployment + Service (ADR 0007), sync-wave 8: after the migration
+# Job. Starts the API only (server + API); the Jobs are the microservices.
+# The secret of the immich-oidc Secret is read by the server itself: OIDC settings
+# live in the database (init.sh), only their client secret comes from here.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: immich-server
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-server
+  namespace: immich
+spec:
+  selector:
+    app: immich-server
+  ports:
+    - name: http
+      port: 2283
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-server
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-server
+  template:
+    metadata:
+      labels:
+        app: immich-server
+    spec:
+      serviceAccountName: immich-server
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Ownership of a new NFS export (ADR 0007: no fsGroup on the volume itself)
+        - name: fix-permissions
+          image: busybox:1.36
+          command: ["sh", "-c", "chown -R 1000:1000 /data"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["CHOWN", "FOWNER"]
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: library
+              mountPath: /data
+        # Media folders and settings of a fresh instance (init.sh, apply-config.sql)
+        - name: init
+          image: ghcr.io/immich-app/immich-server:v3.4.2
+          command: ["/bin/bash", "/opt/immich-scripts/init.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+          envFrom:
+            - configMapRef:
+                name: immich-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich-secrets
+                  key: db-password
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: immich-oidc
+                  key: client-secret
+            - name: IMMICH_MEDIA_LOCATION
+              value: "/data"
+            - name: IMMICH_VERSION
+              value: "v3.4.2"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: library
+              mountPath: /data
+            - name: scripts
+              mountPath: /opt/immich-scripts
+              readOnly: true
+            - name: config
+              mountPath: /etc/immich-config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+        # First account (the admin, OIDC is for the others), then the API key of
+        # the Secret (created, rotated, the others revoked): api-key.sh
+        - name: api-key
+          image: ghcr.io/immich-app/immich-server:v3.4.2
+          command: ["/bin/bash", "/opt/immich-scripts/api-key.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+          envFrom:
+            - configMapRef:
+                name: immich-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich-secrets
+                  key: db-password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: scripts-api-key
+              mountPath: /opt/immich-scripts
+              readOnly: true
+            # the admin credentials of the Secret, in their own directory
+            - name: init-secret
+              mountPath: /run/init
+              readOnly: true
+            - name: state
+              mountPath: /run/secrets
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: server
+          image: ghcr.io/immich-app/immich-server:v3.4.2
+          envFrom:
+            - configMapRef:
+                name: immich-config
+          env:
+            - name: IMMICH_WORKERS_INCLUDE
+              value: "api"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich-secrets
+                  key: db-password
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: immich-oidc
+                  key: client-secret
+          ports:
+            - name: http
+              containerPort: 2283
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          volumeMounts:
+            - name: library
+              mountPath: /data
+            - name: state
+              mountPath: /run/secrets
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: library
+          persistentVolumeClaim:
+            claimName: immich-library-pvc
+        - name: scripts
+          configMap:
+            name: immich-scripts-init
+            defaultMode: 0755
+        - name: scripts-api-key
+          configMap:
+            name: immich-scripts-apikey
+            defaultMode: 0755
+        # defaults/{storage-template,quota}.yaml and oidc/{client-id,issuer,account-url}
+        - name: config
+          projected:
+            sources:
+              - configMap:
+                  name: immich-defaults
+              - configMap:
+                  name: immich-oidc
+        - name: init-secret
+          secret:
+            secretName: immich-secrets
+            items:
+              - key: admin-email
+                path: admin-email
+              - key: admin-password
+                path: admin-password
+        - name: state
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

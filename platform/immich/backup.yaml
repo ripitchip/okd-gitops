@@ -1,0 +1,112 @@
+# immich-db-backup CronJob (ADR 0007): the "Create database dump" job of the web
+# UI, called through the API, so the dump lands in backups/ of the library volume
+# (the dump and the photos are restored together). Idempotent enough to retry: a
+# retry only makes one more dump, the server keeps the last 14.
+#
+#   # one-shot run, right after the install or a restore:
+#   oc -n immich create job --from=cronjob/immich-db-backup immich-db-backup-manual
+#
+# The API key comes from the secret/immich-backup entry of Vault (immich-backup
+# Secret); api-key.sh of the pod writes the first one (ADR 0007).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: immich-db-backup
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: immich-db-backup
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+rules:
+  # the key only travels inside the exec: no Secret readable by a pod you can read
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: immich-db-backup
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: immich-db-backup
+subjects:
+  - kind: ServiceAccount
+    name: immich-db-backup
+    namespace: immich
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: immich-db-backup
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "Europe/Paris"
+  startingDeadlineSeconds: 3600
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 172800
+      template:
+        metadata:
+          labels:
+            app: immich-db-backup
+        spec:
+          serviceAccountName: immich-db-backup
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: queue
+              image: registry.redhat.io/openshift4/ose-tools-rhel9:v4.19
+              command: ["/bin/bash", "/opt/immich-scripts/backup.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                runAsNonRoot: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /opt/immich-scripts
+                  readOnly: true
+                - name: api-key
+                  mountPath: /run/secrets
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: immich-scripts-backup
+            - name: api-key
+              secret:
+                secretName: immich-backup
+                items:
+                  - key: api-key
+                    path: key.txt

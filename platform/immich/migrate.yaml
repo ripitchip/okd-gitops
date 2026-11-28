@@ -1,0 +1,74 @@
+# immich-migrate Job (ADR 0007), sync-wave 5, before immich-server: the schema
+# migrations, then the scratch databases the migration tools create on each run.
+# Replaced by Argo CD after an upgrade (a Job is immutable).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: immich-migrate
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: immich-migrate
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: Replace=true
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    metadata:
+      labels:
+        app: immich-migrate
+    spec:
+      serviceAccountName: immich-migrate
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ghcr.io/immich-app/immich-server:v3.4.2
+          command: ["/bin/bash", "/opt/immich-scripts/migrate.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+          envFrom:
+            - configMapRef:
+                name: immich-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich-secrets
+                  key: db-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: scripts
+              mountPath: /opt/immich-scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: scripts
+          configMap:
+            name: immich-scripts-migrate
+            defaultMode: 0755
+        - name: tmp
+          emptyDir: {}

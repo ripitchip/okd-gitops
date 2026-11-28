@@ -1,0 +1,85 @@
+# api-key.sh, init container of immich-server running after the server (ADR 0007).
+#
+#  1. an API key: Immich stores keys hashed (sha256), the API never returns a
+#     secret, so the key of the CronJob cannot be written from Vault: created here
+#     through the API, rotated when the pod restarts, copied to Vault by hand. The
+#     other keys are revoked (a rotated key keeps admin rights forever);
+#  2. the local admin account: the first signup of a pristine Immich is the admin,
+#     created here with the admin email/password of the immich-secrets Secret.
+#     ONLY on a pristine database: resetting an Immich account has no CLI here, a
+#     database restored from the previous cluster keeps its own accounts.
+#
+# The key lands in /run/secrets/key.txt (emptyDir of the pod): copy it to
+# secret/immich-backup, the next runs reuse it (ADR 0007).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-scripts-apikey
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+data:
+  api-key.sh: |
+    . /opt/immich-scripts/libcommon.sh
+
+    api="http://localhost:${IMMICH_PORT:-2283}/api"
+    url=$(db_url)
+    email=$(cat /run/init/admin-email)
+    password=$(cat /run/init/admin-password)
+
+    for i in $(seq 1 120); do
+      curl -fsS -m 5 "$api/server/ping" >/dev/null 2>&1 && break
+      sleep 5
+    done
+
+    if [ "$(psql "$url" -Atc 'SELECT count(*) FROM "user" WHERE "deletedAt" IS NULL')" = "0" ]; then
+      curl -fsS -c /tmp/cookies -X POST "$api/auth/admin-sign-up" \
+        -H 'Content-Type: application/json' \
+        -d "{\"name\":\"Admin\",\"email\":\"$email\",\"password\":\"$password\"}" >/dev/null
+      echo "first account created: $email"
+    fi
+
+    key=""
+    for candidate in /run/secrets/key.txt /run/state/previous-key.txt; do
+      if [ -s "$candidate" ]; then
+        key=$(cat "$candidate")
+        break
+      fi
+    done
+    if [ -n "$key" ] && curl -fsS -o /dev/null -m 10 -H "x-api-key: $key" "$api/api-keys/me"; then
+      header="x-api-key: $key"
+    else
+      curl -fsS -c /tmp/cookies -X POST "$api/auth/login" \
+        -H 'Content-Type: application/json' \
+        -d "{\"email\":\"$email\",\"password\":\"$password\"}" >/dev/null
+      header="x-immich-user-token: $(awk '$6 == "immich_access_token" { print $7 }' /tmp/cookies | tail -1)"
+    fi
+
+    keys=$(curl -fsS -H "$header" "$api/api-keys" 2>/dev/null || true)
+    if [ -z "$keys" ]; then
+      echo "no session to manage the API key: the admin account of immich-secrets does not" >&2
+      echo "exist on this instance (restored data). Create the key in Immich" >&2
+      echo "(Account > API Keys) and put it in secret/immich-backup, then restart the pod" >&2
+    else
+      id=$(printf '%s' "$keys" | jq -r '.[] | select(.name == "immich-backup") | .id' | head -1)
+      if [ -n "$id" ]; then
+        printf '%s' "$keys" | jq -r --arg id "$id" '.[] | select(.id != $id) | .id' \
+          | while read -r stale; do
+              curl -fsS -o /dev/null -X DELETE -H "$header" "$api/api-keys/$stale"
+              echo "revoked API key $stale"
+            done
+        secret=$(curl -fsS -X POST -H "$header" "$api/api-keys/$id/rotate" | jq -r .secret)
+        echo "immich-backup: key rotated"
+      else
+        secret=$(curl -fsS -X POST -H "$header" -H 'Content-Type: application/json' \
+          -d '{"name":"immich-backup","permissions":["all"]}' "$api/api-keys" | jq -r .secret)
+        echo "immich-backup: key created"
+      fi
+      umask 077
+      printf '%s' "$secret" > /run/secrets/key.txt
+      printf '%s' "$secret" > /run/state/previous-key.txt
+      echo "key.txt written: copy it to secret/immich-backup (ADR 0007)"
+    fi
+
+    # no zonal failure of the pod for a key: the CronJob reports it on its own
+    exit 0

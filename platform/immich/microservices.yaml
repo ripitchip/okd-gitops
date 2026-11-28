@@ -1,0 +1,98 @@
+# Microservices of Immich (ADR 0007): the jobs (thumbnails, metadata, transcoding,
+# schedules), queued by the API and run here. The first start needs the schema and
+# the server: sync-wave 10, after immich-server.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: immich-microservices
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "7"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-microservices
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-microservices
+  template:
+    metadata:
+      labels:
+        app: immich-microservices
+    spec:
+      serviceAccountName: immich-microservices
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: fix-permissions
+          image: busybox:1.36
+          command: ["sh", "-c", "chown -R 1000:1000 /data"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["CHOWN", "FOWNER"]
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: library
+              mountPath: /data
+      containers:
+        - name: microservices
+          image: ghcr.io/immich-app/immich-server:v3.4.2
+          envFrom:
+            - configMapRef:
+                name: immich-config
+          env:
+            - name: IMMICH_WORKERS_INCLUDE
+              value: "microservices"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich-secrets
+                  key: db-password
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          volumeMounts:
+            - name: library
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # the same ReadWriteOnce export as immich-server: Recreate and the
+        # ordering of the waves, the server is down when this one starts
+        - name: library
+          persistentVolumeClaim:
+            claimName: immich-library-pvc
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,28 @@
+# Converted to a Route (openshift.io/ingress-to-route), the cert-manager secret ends
+# up in the TLS fields of the Route. The proxy has to let the uploads through:
+# annotations ported to the Route (haproxy.router.openshift.io/timeout) see ADR 0007.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich
+  namespace: immich
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    haproxy.router.openshift.io/timeout: 600s
+spec:
+  ingressClassName: openshift-default
+  rules:
+    - host: photos.tomlab.fr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: immich-server
+                port:
+                  number: 2283
+  tls:
+    - hosts:
+        - photos.tomlab.fr
+      secretName: immich-tls-cert

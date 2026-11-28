@@ -1,0 +1,13 @@
+# Client "immich" of Keycloak, created by hand (ADR 0007): the secret is in Vault
+# (immich-oidc), these are the values the rest of the configuration uses.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-oidc
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  client-id: "immich"
+  issuer: "https://auth.tomlab.fr/realms/foobarbaz"
+  account-url: "https://auth.tomlab.fr/realms/foobarbaz/account"

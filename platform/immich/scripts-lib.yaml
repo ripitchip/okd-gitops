@@ -1,0 +1,39 @@
+# libcommon.sh, sourced by init.sh, api-key.sh and migrate.sh (ADR 0007). The
+# immich images ship bash, node, curl, jq and every pg_dump/psql major version.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-scripts-lib
+  namespace: immich
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+data:
+  libcommon.sh: |
+    # sourced by init.sh, api-key.sh and migrate.sh
+    set -eu
+
+    # The password comes from the env of the pod (a secretKeyRef). On OpenShift a
+    # Secret is world-readable so that any UID of the range can use it: the same
+    # key also signs the API requests of the CronJob (ADR 0007), the media volume
+    # stays 0700 for UID 1000.
+    db_url() {
+      if [ -z "${DB_PASSWORD:-}" ]; then
+        echo "DB_PASSWORD is empty: set db-password in secret/immich-secrets (ADR 0007)" >&2
+        exit 1
+      fi
+      printf 'postgresql://%s:%s@%s:%s/%s' \
+        "$DB_USERNAME" "$DB_PASSWORD" "$DB_HOSTNAME" "${DB_PORT:-5432}" "$DB_DATABASE_NAME"
+    }
+
+    # The immich images already ship every pg_dump/psql major version
+    # (/usr/lib/postgresql/*/bin): pick the one of the running server.
+    pg_bin() {
+      bin=$1
+      version=$(psql "$(db_url)" -Atc 'SHOW server_version')
+      major=${version%%.*}
+      if [ ! -x "/usr/lib/postgresql/$major/bin/$bin" ]; then
+        echo "no $bin for PostgreSQL $version in this image" >&2
+        return 1
+      fi
+      echo "/usr/lib/postgresql/$major/bin/$bin"
+    }
